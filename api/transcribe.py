@@ -51,7 +51,7 @@ def submit_to_assemblyai(audio_url: str) -> str:
 
     data = json.dumps({
         "audio_url": audio_url,
-        "speech_model": "universal-2",
+        "speech_models": ["universal-2"],
         "iab_categories": True,
         "auto_chapters": True,
         "summarization": True,
