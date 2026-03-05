@@ -54,8 +54,6 @@ def submit_to_assemblyai(audio_url: str) -> str:
         "speech_models": ["universal-2"],
         "iab_categories": True,
         "auto_chapters": True,
-        "summarization": True,
-        "summary_type": "headline",
     }).encode()
 
     req = urllib.request.Request(

@@ -91,12 +91,11 @@ class handler(BaseHTTPRequestHandler):
                 transcript_text = aai_result.get("text", "")
                 categories = extract_categories(aai_result)
 
-                # Get generated title from summary or auto_chapters
-                generated_title = aai_result.get("summary", "")
-                if not generated_title:
-                    chapters = aai_result.get("chapters", [])
-                    if chapters:
-                        generated_title = chapters[0].get("headline", "")
+                # Get generated title from auto_chapters headline
+                generated_title = ""
+                chapters = aai_result.get("chapters", [])
+                if chapters:
+                    generated_title = chapters[0].get("headline", "")
 
                 # Build segments from words
                 segments = []
