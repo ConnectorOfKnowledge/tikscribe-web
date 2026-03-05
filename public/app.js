@@ -155,8 +155,24 @@ async function loadHistory() {
     }
 }
 
-function viewTranscript(data) {
-    showResult(data);
+async function viewTranscript(data) {
+    // History list doesn't include transcript text — fetch full record
+    show('status-section');
+    hide('result-section');
+    setStatus('Loading...', 'Fetching transcript');
+
+    try {
+        const res = await fetch(`${API_BASE}/status?id=${data.id}`);
+        const full = await res.json();
+        if (full.transcript) {
+            showResult(full);
+        } else {
+            showResult(data);
+        }
+    } catch (err) {
+        showResult(data); // Show what we have if fetch fails
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
