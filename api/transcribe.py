@@ -7,9 +7,9 @@ from http.server import BaseHTTPRequestHandler
 from supabase import create_client
 
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
-ASSEMBLYAI_KEY = os.environ.get("ASSEMBLYAI_API_KEY")
+SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip()
+SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
+ASSEMBLYAI_KEY = (os.environ.get("ASSEMBLYAI_API_KEY") or "").strip()
 
 
 def get_video_info(url: str) -> dict:
