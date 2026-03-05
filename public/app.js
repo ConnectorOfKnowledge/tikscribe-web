@@ -36,7 +36,9 @@ async function submitUrl() {
 
         if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.error || 'Failed to submit URL');
+            let msg = err.error || 'Failed to submit URL';
+            if (err.traceback) msg += '\n\n' + err.traceback;
+            throw new Error(msg);
         }
 
         const data = await res.json();
@@ -178,7 +180,11 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function setStatus(text, detail) {
     document.getElementById('status-text').textContent = text;
-    document.getElementById('status-detail').textContent = detail || '';
+    const detailEl = document.getElementById('status-detail');
+    detailEl.textContent = detail || '';
+    detailEl.style.whiteSpace = detail && detail.includes('\n') ? 'pre-wrap' : 'normal';
+    detailEl.style.textAlign = detail && detail.includes('\n') ? 'left' : 'center';
+    detailEl.style.fontSize = detail && detail.includes('\n') ? '0.75rem' : '';
 }
 
 function formatDuration(seconds) {
