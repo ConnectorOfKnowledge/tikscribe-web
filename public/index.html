@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tikscribe</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>tikscribe</h1>
+            <p class="subtitle">Paste a URL. Get a transcript.</p>
+        </header>
+
+        <!-- Submit Form -->
+        <section id="submit-section">
+            <div class="input-group">
+                <input type="url" id="url-input" placeholder="Paste TikTok or YouTube URL..." autocomplete="off">
+                <button id="submit-btn" onclick="submitUrl()">Transcribe</button>
+            </div>
+            <p class="hint">Works with TikTok, YouTube, Instagram Reels, and more</p>
+        </section>
+
+        <!-- Processing Status -->
+        <section id="status-section" class="hidden">
+            <div class="status-card">
+                <div class="spinner"></div>
+                <p id="status-text">Submitting...</p>
+                <p id="status-detail" class="detail"></p>
+            </div>
+        </section>
+
+        <!-- Result -->
+        <section id="result-section" class="hidden">
+            <div class="result-card">
+                <div class="result-header">
+                    <img id="result-thumb" class="thumbnail" alt="Video thumbnail">
+                    <div>
+                        <h2 id="result-title"></h2>
+                        <p id="result-meta" class="meta"></p>
+                        <div id="result-categories" class="categories"></div>
+                    </div>
+                </div>
+                <div class="transcript-box">
+                    <h3>Transcript</h3>
+                    <div id="result-transcript"></div>
+                </div>
+                <button class="btn-secondary" onclick="copyTranscript()">Copy Transcript</button>
+                <button class="btn-secondary" onclick="resetForm()">Transcribe Another</button>
+            </div>
+        </section>
+
+        <!-- Saved Transcripts -->
+        <section id="history-section">
+            <h2 class="section-title">Saved Transcripts</h2>
+            <div id="history-list" class="history-list">
+                <p class="empty-state">No transcripts yet. Paste a URL above to get started.</p>
+            </div>
+        </section>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
