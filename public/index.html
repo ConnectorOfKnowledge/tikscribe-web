@@ -47,6 +47,13 @@
         <!-- Result -->
         <section id="result-section" class="hidden">
             <div class="result-card">
+                <div id="success-banner" class="success-banner hidden">
+                    <span class="success-check">✓</span>
+                    <div class="success-content">
+                        <strong>Saved!</strong>
+                        <span id="success-summary"></span>
+                    </div>
+                </div>
                 <div class="result-header">
                     <img id="result-thumb" class="thumbnail" alt="Video thumbnail">
                     <div>
@@ -67,8 +74,26 @@
                     <h3>Transcript</h3>
                     <div id="result-transcript"></div>
                 </div>
-                <button class="btn-secondary" onclick="copyTranscript()">Copy Transcript</button>
-                <button class="btn-secondary" onclick="resetForm()">Transcribe Another</button>
+                <div id="result-actions" class="result-actions">
+                    <button class="btn-secondary" onclick="copyTranscript()">Copy</button>
+                    <button class="btn-secondary" onclick="toggleEdit()">Edit</button>
+                    <button class="btn-primary" onclick="resetForm()">New Entry</button>
+                </div>
+                <!-- Edit Panel -->
+                <div id="edit-panel" class="edit-panel hidden">
+                    <h3>Edit Notes & Attachments</h3>
+                    <textarea id="edit-notes" placeholder="Add or edit notes..." rows="3"></textarea>
+                    <div id="edit-attachments" class="attachment-grid editable"></div>
+                    <input type="file" id="edit-file-input" accept="image/*" multiple hidden>
+                    <button class="btn-upload" onclick="document.getElementById('edit-file-input').click()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Add Images
+                    </button>
+                    <div class="edit-actions">
+                        <button class="btn-primary" onclick="saveEdit()">Save</button>
+                        <button class="btn-secondary" onclick="cancelEdit()">Cancel</button>
+                    </div>
+                </div>
             </div>
         </section>
 

@@ -643,6 +643,149 @@ header h1 {
     background: rgba(252, 129, 129, 0.1);
 }
 
+/* Success Banner */
+.success-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: rgba(72, 187, 120, 0.1);
+    border: 1px solid rgba(72, 187, 120, 0.25);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s;
+}
+
+.success-check {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #48bb78;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.success-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.success-content strong {
+    color: #48bb78;
+    font-size: 1rem;
+}
+
+.success-summary {
+    color: #888;
+    font-size: 0.8rem;
+}
+
+/* Result Actions */
+.result-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-primary {
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    background: #4a6cf7;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover {
+    background: #3a5ce5;
+}
+
+/* Edit Panel */
+.edit-panel {
+    background: #0d0d15;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+    border: 1px solid #2a2a35;
+}
+
+.edit-panel h3 {
+    font-size: 0.85rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.edit-panel textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #2a2a35;
+    background: #14141f;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    resize: vertical;
+    margin-bottom: 10px;
+    min-height: 60px;
+    transition: border-color 0.2s;
+}
+
+.edit-panel textarea:focus {
+    border-color: #4a6cf7;
+}
+
+.edit-panel .attachment-grid.editable {
+    margin-bottom: 10px;
+}
+
+.edit-panel .attachment-grid.editable img {
+    position: relative;
+}
+
+.edit-attachment-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.edit-attachment-wrap .remove-attach {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(229, 62, 62, 0.9);
+    color: #fff;
+    border: none;
+    font-size: 14px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.edit-panel .btn-upload {
+    margin-bottom: 12px;
+}
+
+.edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
 /* Responsive */
 @media (max-width: 500px) {
     .input-group {

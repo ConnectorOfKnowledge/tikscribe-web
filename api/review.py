@@ -39,6 +39,12 @@ class handler(BaseHTTPRequestHandler):
             if review_notes:
                 update_data["review_notes"] = review_notes
 
+            # Support editing notes and attachments
+            if "notes" in body:
+                update_data["notes"] = body["notes"]
+            if "attachments" in body:
+                update_data["attachments"] = body["attachments"]
+
             result = (
                 sb.table("transcripts")
                 .update(update_data)

@@ -3,6 +3,7 @@
 const API_BASE = '/api';
 let currentTranscript = null;
 let pendingFiles = []; // files queued for upload
+let editAttachments = []; // attachments being edited
 
 // On page load, fetch history
 document.addEventListener('DOMContentLoaded', loadHistory);
@@ -27,6 +28,24 @@ document.getElementById('file-input').addEventListener('change', (e) => {
     e.target.value = ''; // reset so same file can be re-added
 });
 
+// Edit file input handler
+document.addEventListener('DOMContentLoaded', () => {
+    const editInput = document.getElementById('edit-file-input');
+    if (editInput) {
+        editInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                if (editAttachments.length >= 5) { showToast('Max 5 files'); break; }
+                const b64 = await fileToBase64(file);
+                editAttachments.push(b64);
+            }
+            renderEditAttachments();
+            e.target.value = '';
+        });
+    }
+});
+
 function renderFilePreviews() {
     const container = document.getElementById('file-previews');
     container.innerHTML = pendingFiles.map((file, i) => {
@@ -43,20 +62,19 @@ function removeFile(index) {
     renderFilePreviews();
 }
 
+async function fileToBase64(file) {
+    const data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+    });
+    return { name: file.name, type: file.type, size: file.size, data };
+}
+
 async function filesToBase64(files) {
     const results = [];
     for (const file of files) {
-        const b64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.readAsDataURL(file);
-        });
-        results.push({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            data: b64
-        });
+        results.push(await fileToBase64(file));
     }
     return results;
 }
@@ -124,7 +142,7 @@ async function pollStatus(id) {
             const data = await res.json();
 
             if (data.status === 'completed') {
-                showResult(data);
+                showResult(data, true);
                 loadHistory(); // Refresh history
                 return;
             } else if (data.status === 'error') {
@@ -145,12 +163,35 @@ async function pollStatus(id) {
     document.getElementById('submit-btn').disabled = false;
 }
 
-function showResult(data) {
+function showResult(data, isNewSubmission = false) {
     currentTranscript = data;
 
     hide('status-section');
     show('result-section');
     document.getElementById('submit-btn').disabled = false;
+
+    // Hide edit panel if open
+    hide('edit-panel');
+    show('result-actions');
+
+    // Success banner
+    const banner = document.getElementById('success-banner');
+    const summary = document.getElementById('success-summary');
+    if (isNewSubmission) {
+        let parts = ['Transcript'];
+        if (data.notes) parts.push('Notes');
+        if (data.attachments && data.attachments.length > 0)
+            parts.push(`${data.attachments.length} file${data.attachments.length > 1 ? 's' : ''}`);
+        summary.textContent = parts.join(' + ');
+        banner.classList.remove('hidden');
+        // Reset the submission form for next entry
+        document.getElementById('url-input').value = '';
+        document.getElementById('notes-input').value = '';
+        pendingFiles = [];
+        renderFilePreviews();
+    } else {
+        banner.classList.add('hidden');
+    }
 
     // Populate result
     const thumb = document.getElementById('result-thumb');
@@ -305,9 +346,81 @@ function resetForm() {
     document.getElementById('url-input').focus();
 }
 
+// ── Edit Mode ────────────────────────────────────────────────
+
+function toggleEdit() {
+    if (!currentTranscript) return;
+    // Pre-fill edit fields
+    document.getElementById('edit-notes').value = currentTranscript.notes || '';
+    editAttachments = currentTranscript.attachments ? [...currentTranscript.attachments] : [];
+    renderEditAttachments();
+    // Show edit panel, hide action buttons
+    show('edit-panel');
+    hide('result-actions');
+}
+
+function cancelEdit() {
+    hide('edit-panel');
+    show('result-actions');
+}
+
+function renderEditAttachments() {
+    const container = document.getElementById('edit-attachments');
+    if (!container) return;
+    container.innerHTML = editAttachments.map((a, i) =>
+        `<div class="edit-attachment-wrap">
+            <img src="${a.data}" alt="${escapeHtml(a.name || 'screenshot')}">
+            <button class="remove-attach" onclick="removeEditAttachment(${i})">&times;</button>
+        </div>`
+    ).join('');
+}
+
+function removeEditAttachment(index) {
+    editAttachments.splice(index, 1);
+    renderEditAttachments();
+}
+
+async function saveEdit() {
+    if (!currentTranscript) return;
+
+    const saveBtn = document.querySelector('#edit-panel .btn-primary');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    const notes = document.getElementById('edit-notes').value.trim();
+
+    try {
+        const res = await fetch(`${API_BASE}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: currentTranscript.id,
+                review_status: currentTranscript.review_status || null,
+                notes: notes || null,
+                attachments: editAttachments.length > 0 ? editAttachments : null
+            })
+        });
+
+        if (!res.ok) throw new Error('Failed to save changes');
+
+        // Update local state
+        currentTranscript.notes = notes || null;
+        currentTranscript.attachments = editAttachments.length > 0 ? editAttachments : null;
+        showResult(currentTranscript);
+        showToast('Changes saved!');
+        loadHistory();
+
+    } catch (err) {
+        showToast('Error: ' + err.message);
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+    }
+}
+
 // Helpers
-function show(id) { document.getElementById(id).classList.remove('hidden'); }
-function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function show(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function hide(id) { document.getElementById(id)?.classList.add('hidden'); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function setStatus(text, detail) {
