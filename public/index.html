@@ -72,12 +72,21 @@
             </div>
         </section>
 
-        <!-- Saved Transcripts -->
+        <!-- Active Transcripts (unreviewed) -->
         <section id="history-section">
-            <h2 class="section-title">Saved Transcripts</h2>
+            <h2 class="section-title">Pending Review</h2>
             <div id="history-list" class="history-list">
                 <p class="empty-state">No transcripts yet. Paste a URL above to get started.</p>
             </div>
+        </section>
+
+        <!-- Archived Transcripts (reviewed) -->
+        <section id="archive-section" style="display: none;">
+            <h2 class="section-title archive-title" onclick="toggleArchive()">
+                Archive
+                <span id="archive-toggle" class="archive-toggle">Show</span>
+            </h2>
+            <div id="archive-list" class="history-list archive-list hidden"></div>
         </section>
     </div>
 

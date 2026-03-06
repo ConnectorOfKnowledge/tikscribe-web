@@ -208,31 +208,64 @@ async function loadHistory() {
         const data = await res.json();
 
         const list = document.getElementById('history-list');
+        const archiveList = document.getElementById('archive-list');
 
         if (!data.transcripts || data.transcripts.length === 0) {
             list.innerHTML = '<p class="empty-state">No transcripts yet. Paste a URL above to get started.</p>';
+            if (archiveList) archiveList.innerHTML = '';
             return;
         }
 
-        list.innerHTML = data.transcripts.map(t => `
-            <div class="history-item" onclick='viewTranscript(${JSON.stringify(t).replace(/'/g, "&#39;")})'>
-                ${t.thumbnail_url
-                    ? `<img class="history-thumb" src="${t.thumbnail_url}" alt="">`
-                    : '<div class="history-thumb"></div>'
-                }
-                <div class="history-info">
-                    <h3>${escapeHtml(t.generated_title || t.title || 'Untitled')}</h3>
-                    <p class="meta">${escapeHtml(t.creator || 'Unknown')} | ${formatDuration(t.duration)} | ${formatDate(t.created_at)}${t.notes ? '<span class="history-notes-indicator"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>notes</span>' : ''}${t.attachments && t.attachments.length > 0 ? '<span class="history-notes-indicator"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' + t.attachments.length + '</span>' : ''}</p>
-                    <div class="history-categories">
-                        ${(t.categories || []).map(c => `<span class="category-tag">${escapeHtml(c)}</span>`).join('')}
-                    </div>
-                </div>
-            </div>
-        `).join('');
+        // Split into active (unreviewed) and archived (reviewed)
+        const active = data.transcripts.filter(t => t.review_status !== 'reviewed');
+        const archived = data.transcripts.filter(t => t.review_status === 'reviewed');
+
+        // Render active list
+        if (active.length === 0) {
+            list.innerHTML = '<p class="empty-state">All caught up! No unreviewed transcripts.</p>';
+        } else {
+            list.innerHTML = active.map(t => renderHistoryItem(t)).join('');
+        }
+
+        // Render archive
+        if (archiveList) {
+            if (archived.length === 0) {
+                archiveList.innerHTML = '<p class="empty-state">No archived transcripts yet.</p>';
+            } else {
+                archiveList.innerHTML = archived.map(t => renderHistoryItem(t, true)).join('');
+            }
+            // Show/hide archive section
+            const archiveSection = document.getElementById('archive-section');
+            if (archiveSection) {
+                archiveSection.style.display = archived.length > 0 ? 'block' : 'none';
+            }
+        }
 
     } catch (err) {
         console.error('Failed to load history:', err);
     }
+}
+
+function renderHistoryItem(t, isArchived = false) {
+    const badges = [];
+    if (t.notes) badges.push('<span class="history-notes-indicator"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>notes</span>');
+    if (t.attachments && t.attachments.length > 0) badges.push(`<span class="history-notes-indicator"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>${t.attachments.length}</span>`);
+
+    return `
+        <div class="history-item ${isArchived ? 'archived' : ''}" onclick='viewTranscript(${JSON.stringify(t).replace(/'/g, "&#39;")})'>
+            ${t.thumbnail_url
+                ? `<img class="history-thumb" src="${t.thumbnail_url}" alt="">`
+                : '<div class="history-thumb"></div>'
+            }
+            <div class="history-info">
+                <h3>${escapeHtml(t.generated_title || t.title || 'Untitled')}</h3>
+                <p class="meta">${escapeHtml(t.creator || 'Unknown')} | ${formatDuration(t.duration)} | ${formatDate(t.created_at)}${badges.join('')}</p>
+                <div class="history-categories">
+                    ${(t.categories || []).map(c => `<span class="category-tag">${escapeHtml(c)}</span>`).join('')}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 async function viewTranscript(data) {
@@ -302,6 +335,18 @@ function formatDate(dateStr) {
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function toggleArchive() {
+    const list = document.getElementById('archive-list');
+    const toggle = document.getElementById('archive-toggle');
+    if (list.classList.contains('hidden')) {
+        list.classList.remove('hidden');
+        toggle.textContent = 'Hide';
+    } else {
+        list.classList.add('hidden');
+        toggle.textContent = 'Show';
+    }
 }
 
 function showToast(msg) {

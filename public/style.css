@@ -441,6 +441,35 @@ header h1 {
     font-size: 0.9rem;
 }
 
+/* Archive section */
+.archive-title {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+}
+
+.archive-title:hover {
+    color: #aaa;
+}
+
+.archive-toggle {
+    font-size: 0.75rem;
+    color: #4a6cf7;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.archive-list .history-item {
+    opacity: 0.6;
+}
+
+.archive-list .history-item:hover {
+    opacity: 1;
+}
+
 /* Utility */
 .hidden {
     display: none;
