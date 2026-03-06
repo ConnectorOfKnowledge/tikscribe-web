@@ -356,3 +356,80 @@ function showToast(msg) {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 2000);
 }
+
+// ── TicketDeck Bug Widget ──────────────────────────────────────
+const TICKETDECK_URL = 'https://dgnikbbugiuuwokwenlm.supabase.co/rest/v1/tickets';
+const TICKETDECK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnbmlrYmJ1Z2l1dXdva3dlbmxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgyNjIxMDMsImV4cCI6MjA1MzgzODEwM30.L2VH13C5NYtdSBoENpoh9Q_d7iJHDOF-mGGXZsJKrFk';
+
+function toggleBugPanel() {
+    const panel = document.getElementById('bug-panel');
+    panel.classList.toggle('hidden');
+    // Reset form when opening
+    if (!panel.classList.contains('hidden')) {
+        document.getElementById('bug-form').reset();
+        const status = document.getElementById('bug-status');
+        status.classList.add('hidden');
+        status.className = 'bug-status-msg hidden';
+    }
+}
+
+async function submitBugTicket(e) {
+    e.preventDefault();
+
+    const btn = document.getElementById('bug-submit-btn');
+    const statusEl = document.getElementById('bug-status');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+    statusEl.classList.add('hidden');
+
+    const title = document.getElementById('bug-title').value.trim();
+    const description = document.getElementById('bug-desc').value.trim();
+    const type = document.getElementById('bug-type').value;
+    const priority = document.getElementById('bug-priority').value;
+
+    const ticket = {
+        project: 'tikscribe',
+        type,
+        priority,
+        title: title.substring(0, 60),
+        description: description || title,
+        status: 'open',
+        tags: ['tikscribe-widget'],
+    };
+
+    try {
+        const res = await fetch(TICKETDECK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': TICKETDECK_KEY,
+                'Authorization': `Bearer ${TICKETDECK_KEY}`,
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(ticket)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.message || 'Failed to submit ticket');
+        }
+
+        statusEl.textContent = 'Ticket submitted! Thanks for reporting.';
+        statusEl.className = 'bug-status-msg success';
+        statusEl.classList.remove('hidden');
+        document.getElementById('bug-form').reset();
+
+        // Auto-close after 2s
+        setTimeout(() => {
+            toggleBugPanel();
+        }, 2000);
+
+    } catch (err) {
+        statusEl.textContent = 'Error: ' + err.message;
+        statusEl.className = 'bug-status-msg error';
+        statusEl.classList.remove('hidden');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Submit Ticket';
+    }
+}

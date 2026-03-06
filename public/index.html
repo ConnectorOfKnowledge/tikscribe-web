@@ -90,6 +90,40 @@
         </section>
     </div>
 
+    <!-- TicketDeck Bug Widget -->
+    <button id="bug-fab" onclick="toggleBugPanel()" title="Report a Bug">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+    </button>
+
+    <div id="bug-panel" class="bug-panel hidden">
+        <div class="bug-panel-header">
+            <h3>Report an Issue</h3>
+            <button class="bug-close" onclick="toggleBugPanel()">&times;</button>
+        </div>
+        <form id="bug-form" onsubmit="submitBugTicket(event)">
+            <input type="text" id="bug-title" placeholder="Short title..." required>
+            <textarea id="bug-desc" placeholder="Describe the issue..." rows="3"></textarea>
+            <div class="bug-row">
+                <select id="bug-type">
+                    <option value="bug">Bug</option>
+                    <option value="feature">Feature</option>
+                    <option value="ui_ux">UI/UX</option>
+                    <option value="performance">Performance</option>
+                    <option value="other">Other</option>
+                </select>
+                <select id="bug-priority">
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <button type="submit" id="bug-submit-btn" class="bug-submit">Submit Ticket</button>
+        </form>
+        <p id="bug-status" class="bug-status-msg hidden"></p>
+    </div>
+
     <script src="/app.js"></script>
 </body>
 </html>

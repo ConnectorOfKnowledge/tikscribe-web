@@ -495,6 +495,154 @@ header h1 {
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+/* TicketDeck Bug Widget */
+#bug-fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #e53e3e;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+    transition: all 0.2s;
+    z-index: 200;
+}
+
+#bug-fab:hover {
+    background: #c53030;
+    transform: scale(1.1);
+}
+
+.bug-panel {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 320px;
+    background: #14141f;
+    border: 1px solid #2a2a35;
+    border-radius: 16px;
+    padding: 20px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    animation: bugSlideUp 0.2s ease-out;
+}
+
+@keyframes bugSlideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.bug-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.bug-panel-header h3 {
+    font-size: 1rem;
+    color: #fff;
+    font-weight: 600;
+}
+
+.bug-close {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1.4rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.bug-close:hover {
+    color: #fff;
+}
+
+#bug-form input,
+#bug-form textarea,
+#bug-form select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #2a2a35;
+    background: #0d0d15;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+}
+
+#bug-form input:focus,
+#bug-form textarea:focus,
+#bug-form select:focus {
+    border-color: #e53e3e;
+}
+
+#bug-form input::placeholder,
+#bug-form textarea::placeholder {
+    color: #555;
+}
+
+.bug-row {
+    display: flex;
+    gap: 8px;
+}
+
+.bug-row select {
+    flex: 1;
+}
+
+.bug-submit {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    background: #e53e3e;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 4px;
+}
+
+.bug-submit:hover {
+    background: #c53030;
+}
+
+.bug-submit:disabled {
+    background: #333;
+    cursor: not-allowed;
+}
+
+.bug-status-msg {
+    text-align: center;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.bug-status-msg.success {
+    color: #68d391;
+    background: rgba(104, 211, 145, 0.1);
+}
+
+.bug-status-msg.error {
+    color: #fc8181;
+    background: rgba(252, 129, 129, 0.1);
+}
+
 /* Responsive */
 @media (max-width: 500px) {
     .input-group {
