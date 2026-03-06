@@ -359,7 +359,7 @@ function showToast(msg) {
 
 // ── TicketDeck Bug Widget ──────────────────────────────────────
 const TICKETDECK_URL = 'https://dgnikbbugiuuwokwenlm.supabase.co/rest/v1/tickets';
-const TICKETDECK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnbmlrYmJ1Z2l1dXdva3dlbmxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgyNjIxMDMsImV4cCI6MjA1MzgzODEwM30.L2VH13C5NYtdSBoENpoh9Q_d7iJHDOF-mGGXZsJKrFk';
+const TICKETDECK_KEY = 'sb_publishable_L2VH13C5NYtdSBoENpoh9Q_d7iJHDOF';
 
 function toggleBugPanel() {
     const panel = document.getElementById('bug-panel');
