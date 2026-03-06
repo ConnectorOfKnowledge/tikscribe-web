@@ -20,6 +20,19 @@
                 <button id="submit-btn" onclick="submitUrl()">Transcribe</button>
             </div>
             <p class="hint">Works with TikTok, YouTube, Instagram Reels, and more</p>
+
+            <!-- Notes -->
+            <textarea id="notes-input" placeholder="Add notes... (optional)" rows="2"></textarea>
+
+            <!-- File Upload -->
+            <div class="upload-area" id="upload-area">
+                <input type="file" id="file-input" accept="image/*" multiple hidden>
+                <button class="btn-upload" onclick="document.getElementById('file-input').click()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Attach Screenshots
+                </button>
+                <div id="file-previews" class="file-previews"></div>
+            </div>
         </section>
 
         <!-- Processing Status -->
@@ -41,6 +54,14 @@
                         <p id="result-meta" class="meta"></p>
                         <div id="result-categories" class="categories"></div>
                     </div>
+                </div>
+                <div id="result-notes-box" class="notes-box hidden">
+                    <h3>Notes</h3>
+                    <div id="result-notes"></div>
+                </div>
+                <div id="result-attachments-box" class="attachments-box hidden">
+                    <h3>Attachments</h3>
+                    <div id="result-attachments" class="attachment-grid"></div>
                 </div>
                 <div class="transcript-box">
                     <h3>Transcript</h3>

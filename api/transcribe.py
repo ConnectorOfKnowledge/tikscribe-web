@@ -175,11 +175,21 @@ class handler(BaseHTTPRequestHandler):
             step = "submitting to AssemblyAI"
             aai_id = submit_to_assemblyai(direct_url)
 
+            # Get optional notes and attachments
+            notes = body.get("notes", "").strip() or None
+            attachments = body.get("attachments", None)
+            # Validate attachments (max 5, max 2MB each)
+            if attachments:
+                attachments = attachments[:5]
+                for att in attachments:
+                    if len(att.get("data", "")) > 2_800_000:  # ~2MB base64
+                        att["data"] = att["data"][:100] + "...[truncated]"
+
             # Step 3: Save to Supabase
             step = "saving to Supabase"
             from supabase import create_client
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-            record = sb.table("transcripts").insert({
+            insert_data = {
                 "url": url,
                 "title": title,
                 "creator": creator,
@@ -188,7 +198,13 @@ class handler(BaseHTTPRequestHandler):
                 "description": description,
                 "status": "processing",
                 "assemblyai_id": aai_id,
-            }).execute()
+            }
+            if notes:
+                insert_data["notes"] = notes
+            if attachments:
+                insert_data["attachments"] = attachments
+
+            record = sb.table("transcripts").insert(insert_data).execute()
 
             row_id = record.data[0]["id"]
 
