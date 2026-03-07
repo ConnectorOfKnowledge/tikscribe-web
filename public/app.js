@@ -184,11 +184,8 @@ function showResult(data, isNewSubmission = false) {
             parts.push(`${data.attachments.length} file${data.attachments.length > 1 ? 's' : ''}`);
         summary.textContent = parts.join(' + ');
         banner.classList.remove('hidden');
-        // Reset the submission form for next entry
-        document.getElementById('url-input').value = '';
-        document.getElementById('notes-input').value = '';
-        pendingFiles = [];
-        renderFilePreviews();
+        // Show confirmation modal
+        showConfirmationModal(data, parts.join(' + '));
     } else {
         banner.classList.add('hidden');
     }
@@ -205,6 +202,17 @@ function showResult(data, isNewSubmission = false) {
     document.getElementById('result-title').textContent = data.generated_title || data.title || 'Untitled';
     document.getElementById('result-meta').textContent =
         `${data.creator || 'Unknown'} | ${formatDuration(data.duration)}`;
+
+    // Source URL
+    const sourceLink = document.getElementById('result-source-url');
+    if (data.url) {
+        sourceLink.href = data.url;
+        sourceLink.textContent = truncateUrl(data.url, 50);
+        sourceLink.classList.remove('hidden');
+    } else {
+        sourceLink.classList.add('hidden');
+    }
+
     document.getElementById('result-transcript').textContent = data.transcript;
 
     // Notes
@@ -261,11 +269,11 @@ async function loadHistory() {
         const active = data.transcripts.filter(t => t.review_status !== 'reviewed');
         const archived = data.transcripts.filter(t => t.review_status === 'reviewed');
 
-        // Render active list
+        // Render active list grouped by category
         if (active.length === 0) {
             list.innerHTML = '<p class="empty-state">All caught up! No unreviewed transcripts.</p>';
         } else {
-            list.innerHTML = active.map(t => renderHistoryItem(t)).join('');
+            list.innerHTML = renderGroupedHistory(active);
         }
 
         // Render archive
@@ -287,10 +295,58 @@ async function loadHistory() {
     }
 }
 
+function renderGroupedHistory(transcripts) {
+    // Group by primary category (first category, or 'Uncategorized')
+    const groups = {};
+    transcripts.forEach(t => {
+        const cat = (t.categories && t.categories.length > 0) ? t.categories[0] : 'Uncategorized';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(t);
+    });
+
+    // Sort categories alphabetically, but put Uncategorized last
+    const sortedCats = Object.keys(groups).sort((a, b) => {
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b);
+    });
+
+    return sortedCats.map(cat => {
+        const items = groups[cat];
+        const catId = `cat-${cat.replace(/[^a-zA-Z0-9]/g, '-')}`;
+        return `
+            <div class="category-group">
+                <div class="category-group-header" onclick="toggleCategoryGroup('${catId}')">
+                    <span class="category-group-name">${escapeHtml(cat)}</span>
+                    <span class="category-group-count">${items.length}</span>
+                    <span class="category-group-chevron" id="${catId}-chevron">&#9660;</span>
+                </div>
+                <div class="category-group-items" id="${catId}">
+                    ${items.map(t => renderHistoryItem(t)).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleCategoryGroup(catId) {
+    const items = document.getElementById(catId);
+    const chevron = document.getElementById(catId + '-chevron');
+    if (items.classList.contains('collapsed')) {
+        items.classList.remove('collapsed');
+        chevron.innerHTML = '&#9660;';
+    } else {
+        items.classList.add('collapsed');
+        chevron.innerHTML = '&#9654;';
+    }
+}
+
 function renderHistoryItem(t, isArchived = false) {
     const badges = [];
     if (t.notes) badges.push('<span class="history-notes-indicator"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>notes</span>');
     if (t.attachments && t.attachments.length > 0) badges.push(`<span class="history-notes-indicator"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>${t.attachments.length}</span>`);
+
+    const sourceUrl = t.url ? `<a class="history-source-link" href="${escapeHtml(t.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${truncateUrl(t.url, 40)}</a>` : '';
 
     return `
         <div class="history-item ${isArchived ? 'archived' : ''}" onclick='viewTranscript(${JSON.stringify(t).replace(/'/g, "&#39;")})'>
@@ -301,6 +357,7 @@ function renderHistoryItem(t, isArchived = false) {
             <div class="history-info">
                 <h3>${escapeHtml(t.generated_title || t.title || 'Untitled')}</h3>
                 <p class="meta">${escapeHtml(t.creator || 'Unknown')} | ${formatDuration(t.duration)} | ${formatDate(t.created_at)}${badges.join('')}</p>
+                ${sourceUrl}
                 <div class="history-categories">
                     ${(t.categories || []).map(c => `<span class="category-tag">${escapeHtml(c)}</span>`).join('')}
                 </div>
@@ -450,6 +507,13 @@ function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function truncateUrl(url, maxLen) {
+    if (!url) return '';
+    // Strip protocol for display
+    const clean = url.replace(/^https?:\/\//, '');
+    return clean.length > maxLen ? clean.substring(0, maxLen) + '...' : clean;
+}
+
 function toggleArchive() {
     const list = document.getElementById('archive-list');
     const toggle = document.getElementById('archive-toggle');
@@ -460,6 +524,33 @@ function toggleArchive() {
         list.classList.add('hidden');
         toggle.textContent = 'Show';
     }
+}
+
+// ── Confirmation Modal ───────────────────────────────────────
+
+function showConfirmationModal(data, summaryText) {
+    const details = document.getElementById('confirm-details');
+    const title = data.generated_title || data.title || 'Untitled';
+    const creator = data.creator || 'Unknown';
+    details.innerHTML = `<strong>${escapeHtml(title)}</strong><br>${escapeHtml(creator)} &mdash; ${summaryText}`;
+    document.getElementById('confirm-overlay').classList.remove('hidden');
+}
+
+function dismissConfirmation(event) {
+    // Only dismiss if clicking the overlay background, not the modal itself
+    if (event.target.id === 'confirm-overlay') {
+        acknowledgeConfirmation();
+    }
+}
+
+function acknowledgeConfirmation() {
+    document.getElementById('confirm-overlay').classList.add('hidden');
+    // Clear the form for a new entry
+    document.getElementById('url-input').value = '';
+    document.getElementById('notes-input').value = '';
+    pendingFiles = [];
+    renderFilePreviews();
+    document.getElementById('url-input').focus();
 }
 
 function showToast(msg) {

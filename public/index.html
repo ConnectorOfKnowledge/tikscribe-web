@@ -59,6 +59,7 @@
                     <div>
                         <h2 id="result-title"></h2>
                         <p id="result-meta" class="meta"></p>
+                        <a id="result-source-url" class="source-link hidden" href="#" target="_blank" rel="noopener"></a>
                         <div id="result-categories" class="categories"></div>
                     </div>
                 </div>
@@ -147,6 +148,16 @@
             <button type="submit" id="bug-submit-btn" class="bug-submit">Submit Ticket</button>
         </form>
         <p id="bug-status" class="bug-status-msg hidden"></p>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-overlay" class="confirm-overlay hidden" onclick="dismissConfirmation(event)">
+        <div class="confirm-modal">
+            <div class="confirm-icon">&#10003;</div>
+            <h2>Transcription Saved!</h2>
+            <p id="confirm-details" class="confirm-details"></p>
+            <button class="btn-primary confirm-btn" onclick="acknowledgeConfirmation()">Start New Entry</button>
+        </div>
     </div>
 
     <script src="/app.js"></script>
