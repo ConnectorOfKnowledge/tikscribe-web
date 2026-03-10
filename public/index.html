@@ -145,6 +145,14 @@
                     <option value="high">High</option>
                 </select>
             </div>
+            <div class="bug-upload-area">
+                <input type="file" id="bug-file-input" accept="image/*" multiple hidden>
+                <button type="button" class="bug-attach-btn" onclick="document.getElementById('bug-file-input').click()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Attach Screenshots
+                </button>
+                <div id="bug-file-previews" class="bug-file-previews"></div>
+            </div>
             <button type="submit" id="bug-submit-btn" class="bug-submit">Submit Ticket</button>
         </form>
         <p id="bug-status" class="bug-status-msg hidden"></p>

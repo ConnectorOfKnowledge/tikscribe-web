@@ -1,12 +1,47 @@
 // tikscribe frontend
 
-const API_BASE = '/api';
+// Detect native app (Capacitor) vs web — API calls need full URL in native
+const isNative = window.Capacitor !== undefined;
+const API_BASE = isNative ? 'https://tikscribe-web.vercel.app/api' : '/api';
 let currentTranscript = null;
 let pendingFiles = []; // files queued for upload
 let editAttachments = []; // attachments being edited
 
-// On page load, fetch history
-document.addEventListener('DOMContentLoaded', loadHistory);
+// On page load, fetch history and check for shared intent
+document.addEventListener('DOMContentLoaded', () => {
+    loadHistory();
+    checkSharedIntent();
+});
+
+// ── Share Intent (Android) ───────────────────────────────────
+function checkSharedIntent() {
+    // Only runs inside Capacitor (native app)
+    if (!window.Capacitor) return;
+
+    // Native code injects window._sharedIntentText from Intent.EXTRA_TEXT
+    // (same way a text message app reads the shared link)
+    function tryApply() {
+        if (window._sharedIntentText) {
+            const text = window._sharedIntentText;
+            window._sharedIntentText = null;
+            const urlMatch = text.match(/https?:\/\/[^\s]+/);
+            if (urlMatch) {
+                document.getElementById('url-input').value = urlMatch[0];
+                showToast('URL ready — add notes and tap Transcribe');
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Poll for the injected value (native retries injection at staggered delays)
+    if (!tryApply()) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+            if (tryApply() || ++attempts >= 15) clearInterval(interval);
+        }, 300);
+    }
+}
 
 // Allow Enter key to submit (but not from textarea)
 document.getElementById('url-input').addEventListener('keydown', (e) => {
@@ -564,6 +599,40 @@ function showToast(msg) {
 // ── TicketDeck Bug Widget ──────────────────────────────────────
 const TICKETDECK_URL = 'https://dgnikbbugiuuwokwenlm.supabase.co/rest/v1/tickets';
 const TICKETDECK_KEY = 'sb_publishable_L2VH13C5NYtdSBoENpoh9Q_d7iJHDOF';
+let bugFiles = [];
+
+// Bug file input handler
+document.addEventListener('DOMContentLoaded', () => {
+    const bugInput = document.getElementById('bug-file-input');
+    if (bugInput) {
+        bugInput.addEventListener('change', (e) => {
+            Array.from(e.target.files).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                if (bugFiles.length >= 3) { showToast('Max 3 screenshots'); return; }
+                bugFiles.push(file);
+            });
+            renderBugFilePreviews();
+            e.target.value = '';
+        });
+    }
+});
+
+function renderBugFilePreviews() {
+    const container = document.getElementById('bug-file-previews');
+    if (!container) return;
+    container.innerHTML = bugFiles.map((file, i) => {
+        const url = URL.createObjectURL(file);
+        return `<div class="bug-file-preview">
+            <img src="${url}" alt="${escapeHtml(file.name)}">
+            <button class="remove-bug-file" onclick="removeBugFile(${i})">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+function removeBugFile(index) {
+    bugFiles.splice(index, 1);
+    renderBugFilePreviews();
+}
 
 function toggleBugPanel() {
     const panel = document.getElementById('bug-panel');
@@ -571,6 +640,8 @@ function toggleBugPanel() {
     // Reset form when opening
     if (!panel.classList.contains('hidden')) {
         document.getElementById('bug-form').reset();
+        bugFiles = [];
+        renderBugFilePreviews();
         const status = document.getElementById('bug-status');
         status.classList.add('hidden');
         status.className = 'bug-status-msg hidden';
@@ -591,6 +662,9 @@ async function submitBugTicket(e) {
     const type = document.getElementById('bug-type').value;
     const priority = document.getElementById('bug-priority').value;
 
+    // Convert bug files to base64
+    const attachments = bugFiles.length > 0 ? await filesToBase64(bugFiles) : null;
+
     const ticket = {
         project: 'tikscribe',
         type,
@@ -600,6 +674,7 @@ async function submitBugTicket(e) {
         status: 'open',
         tags: ['tikscribe-widget'],
     };
+    if (attachments) ticket.attachments = attachments;
 
     try {
         const res = await fetch(TICKETDECK_URL, {
@@ -622,6 +697,8 @@ async function submitBugTicket(e) {
         statusEl.className = 'bug-status-msg success';
         statusEl.classList.remove('hidden');
         document.getElementById('bug-form').reset();
+        bugFiles = [];
+        renderBugFilePreviews();
 
         // Auto-close after 2s
         setTimeout(() => {

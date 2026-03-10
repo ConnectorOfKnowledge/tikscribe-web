@@ -6,3 +6,11 @@ __pycache__/
 node_modules/
 
 .vercel
+.env*.local
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+android/app/src/main/assets/public/
