@@ -102,33 +102,51 @@ def get_video_info(url: str) -> dict:
         return get_ytdlp_info(url)
 
 
+IAB_SUPPORTED_LANGUAGES = {"de", "en", "es", "fr", "hi", "it", "nl", "pt"}
+
+
 def submit_to_assemblyai(audio_url: str) -> str:
-    """Submit audio URL to AssemblyAI for transcription."""
+    """Submit audio URL to AssemblyAI for transcription.
+
+    First attempts with iab_categories enabled. If AssemblyAI rejects the
+    request due to an unsupported language, retries without iab_categories.
+    """
     import urllib.request
     import urllib.error
 
-    data = json.dumps({
+    def _submit(payload: dict) -> str:
+        req_data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            "https://api.assemblyai.com/v2/transcript",
+            data=req_data,
+            headers={
+                "Authorization": ASSEMBLYAI_KEY,
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+            return result["id"]
+
+    payload = {
         "audio_url": audio_url,
         "speech_models": ["universal-2"],
         "iab_categories": True,
         "auto_chapters": True,
-    }).encode()
-
-    req = urllib.request.Request(
-        "https://api.assemblyai.com/v2/transcript",
-        data=data,
-        headers={
-            "Authorization": ASSEMBLYAI_KEY,
-            "Content-Type": "application/json",
-        },
-    )
+    }
 
     try:
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            return result["id"]
+        return _submit(payload)
     except urllib.error.HTTPError as e:
         body = e.read().decode()
+        # If the error is about iab_categories language support, retry without it
+        if "iab_categories" in body.lower() and "language" in body.lower():
+            payload["iab_categories"] = False
+            try:
+                return _submit(payload)
+            except urllib.error.HTTPError as e2:
+                body2 = e2.read().decode()
+                raise RuntimeError(f"AssemblyAI error {e2.code}: {body2[:500]}")
         raise RuntimeError(f"AssemblyAI error {e.code}: {body[:500]}")
 
 
@@ -175,8 +193,13 @@ class handler(BaseHTTPRequestHandler):
             step = "submitting to AssemblyAI"
             aai_id = submit_to_assemblyai(direct_url)
 
-            # Get optional notes and attachments
+            # Get optional notes, attachments, and rating
             notes = body.get("notes", "").strip() or None
+            rating = body.get("rating")
+            if rating is not None:
+                rating = int(rating)
+                if rating < 1 or rating > 5:
+                    rating = None
             attachments = body.get("attachments", None)
             # Validate attachments (max 5, max 2MB each)
             if attachments:
@@ -201,6 +224,8 @@ class handler(BaseHTTPRequestHandler):
             }
             if notes:
                 insert_data["notes"] = notes
+            if rating is not None:
+                insert_data["rating"] = rating
             if attachments:
                 insert_data["attachments"] = attachments
 
@@ -217,8 +242,9 @@ class handler(BaseHTTPRequestHandler):
 
         except Exception as e:
             tb = traceback.format_exc()
+            print(f"[ERROR] Failed at '{step}': {str(e)}\n{tb}", file=sys.stderr)
             error_msg = f"Failed at '{step}': {str(e)}"
-            self._respond(500, {"error": error_msg, "traceback": tb[-800:]})
+            self._respond(500, {"error": error_msg})
 
     def do_OPTIONS(self):
         self.send_response(200)
