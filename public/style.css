@@ -117,6 +117,77 @@ header h1 {
     color: #555;
 }
 
+/* Star Rating Input */
+.rating-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.rating-label {
+    color: #888;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.star-rating {
+    display: flex;
+    gap: 2px;
+}
+
+.star-rating .star {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #2a2a35;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: color 0.15s, transform 0.15s;
+    line-height: 1;
+}
+
+.star-rating .star:hover {
+    transform: scale(1.15);
+}
+
+.star-rating .star.active,
+.star-rating .star.hover {
+    color: #f6ad55;
+}
+
+.rating-clear {
+    background: none;
+    border: none;
+    color: #555;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    display: none;
+    transition: color 0.2s;
+}
+
+.rating-clear:hover {
+    color: #e53e3e;
+}
+
+/* Star display (read-only in history/result) */
+.rating-display {
+    display: inline-flex;
+    margin-left: 8px;
+    gap: 1px;
+}
+
+.star-display {
+    font-size: 0.8rem;
+    color: #2a2a35;
+    line-height: 1;
+}
+
+.star-display.filled {
+    color: #f6ad55;
+}
+
 /* Upload area */
 .upload-area {
     margin-top: 10px;

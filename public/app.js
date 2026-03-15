@@ -6,6 +6,7 @@ const API_BASE = isNative ? 'https://tikscribe-web.vercel.app/api' : '/api';
 let currentTranscript = null;
 let pendingFiles = []; // files queued for upload
 let editAttachments = []; // attachments being edited
+let selectedRating = 0; // 0 = no rating selected
 
 // On page load, fetch history and check for shared intent
 document.addEventListener('DOMContentLoaded', () => {
@@ -114,6 +115,44 @@ async function filesToBase64(files) {
     return results;
 }
 
+function setRating(value) {
+    selectedRating = value;
+    updateStarDisplay();
+}
+
+function updateStarDisplay() {
+    const stars = document.querySelectorAll('#star-rating .star');
+    stars.forEach((star, i) => {
+        star.classList.toggle('active', i < selectedRating);
+    });
+    const clearBtn = document.getElementById('rating-clear');
+    if (clearBtn) clearBtn.style.display = selectedRating > 0 ? 'inline-block' : 'none';
+}
+
+// Star hover effects
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('star-rating');
+    if (!container) return;
+    const stars = container.querySelectorAll('.star');
+    stars.forEach((star, i) => {
+        star.addEventListener('mouseenter', () => {
+            stars.forEach((s, j) => s.classList.toggle('hover', j <= i));
+        });
+    });
+    container.addEventListener('mouseleave', () => {
+        stars.forEach(s => s.classList.remove('hover'));
+    });
+});
+
+function renderStarsReadonly(rating) {
+    if (!rating) return '';
+    let stars = '';
+    for (let i = 1; i <= 5; i++) {
+        stars += `<span class="star-display ${i <= rating ? 'filled' : ''}">\u2605</span>`;
+    }
+    return `<span class="rating-display">${stars}</span>`;
+}
+
 async function submitUrl() {
     const input = document.getElementById('url-input');
     const url = input.value.trim();
@@ -137,6 +176,7 @@ async function submitUrl() {
         // Submit the URL with notes and attachments
         const payload = { url };
         if (notes) payload.notes = notes;
+        if (selectedRating > 0) payload.rating = selectedRating;
         if (attachments.length > 0) payload.attachments = attachments;
 
         const res = await fetch(`${API_BASE}/transcribe`, {
@@ -235,8 +275,8 @@ function showResult(data, isNewSubmission = false) {
     }
 
     document.getElementById('result-title').textContent = data.generated_title || data.title || 'Untitled';
-    document.getElementById('result-meta').textContent =
-        `${data.creator || 'Unknown'} | ${formatDuration(data.duration)}`;
+    const metaText = `${data.creator || 'Unknown'} | ${formatDuration(data.duration)}`;
+    document.getElementById('result-meta').innerHTML = escapeHtml(metaText) + renderStarsReadonly(data.rating);
 
     // Source URL
     const sourceLink = document.getElementById('result-source-url');
@@ -391,7 +431,7 @@ function renderHistoryItem(t, isArchived = false) {
             }
             <div class="history-info">
                 <h3>${escapeHtml(t.generated_title || t.title || 'Untitled')}</h3>
-                <p class="meta">${escapeHtml(t.creator || 'Unknown')} | ${formatDuration(t.duration)} | ${formatDate(t.created_at)}${badges.join('')}</p>
+                <p class="meta">${escapeHtml(t.creator || 'Unknown')} | ${formatDuration(t.duration)} | ${formatDate(t.created_at)}${badges.join('')}${renderStarsReadonly(t.rating)}</p>
                 ${sourceUrl}
                 <div class="history-categories">
                     ${(t.categories || []).map(c => `<span class="category-tag">${escapeHtml(c)}</span>`).join('')}
@@ -433,6 +473,7 @@ function resetForm() {
     hide('result-section');
     document.getElementById('url-input').value = '';
     document.getElementById('notes-input').value = '';
+    setRating(0);
     pendingFiles = [];
     renderFilePreviews();
     document.getElementById('url-input').focus();
@@ -583,6 +624,7 @@ function acknowledgeConfirmation() {
     // Clear the form for a new entry
     document.getElementById('url-input').value = '';
     document.getElementById('notes-input').value = '';
+    setRating(0);
     pendingFiles = [];
     renderFilePreviews();
     document.getElementById('url-input').focus();

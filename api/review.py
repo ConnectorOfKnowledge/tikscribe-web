@@ -39,11 +39,18 @@ class handler(BaseHTTPRequestHandler):
             if review_notes:
                 update_data["review_notes"] = review_notes
 
-            # Support editing notes and attachments
+            # Support editing notes, attachments, and rating
             if "notes" in body:
                 update_data["notes"] = body["notes"]
             if "attachments" in body:
                 update_data["attachments"] = body["attachments"]
+            if "rating" in body:
+                rating = body["rating"]
+                if rating is not None:
+                    rating = int(rating)
+                    if rating < 1 or rating > 5:
+                        rating = None
+                update_data["rating"] = rating
 
             result = (
                 sb.table("transcripts")

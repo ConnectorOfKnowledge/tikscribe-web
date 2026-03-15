@@ -24,6 +24,19 @@
             <!-- Notes -->
             <textarea id="notes-input" placeholder="Add notes... (optional)" rows="2"></textarea>
 
+            <!-- Rating -->
+            <div class="rating-input" id="rating-input">
+                <span class="rating-label">Priority:</span>
+                <div class="star-rating" id="star-rating">
+                    <button type="button" class="star" data-value="1" onclick="setRating(1)" title="1 - Rarely look at">&#9733;</button>
+                    <button type="button" class="star" data-value="2" onclick="setRating(2)" title="2 - Low priority">&#9733;</button>
+                    <button type="button" class="star" data-value="3" onclick="setRating(3)" title="3 - Maybe look at">&#9733;</button>
+                    <button type="button" class="star" data-value="4" onclick="setRating(4)" title="4 - Group together">&#9733;</button>
+                    <button type="button" class="star" data-value="5" onclick="setRating(5)" title="5 - Must address">&#9733;</button>
+                </div>
+                <button type="button" class="rating-clear" id="rating-clear" onclick="setRating(0)" title="Clear rating">&times;</button>
+            </div>
+
             <!-- File Upload -->
             <div class="upload-area" id="upload-area">
                 <input type="file" id="file-input" accept="image/*" multiple hidden>

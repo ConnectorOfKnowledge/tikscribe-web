@@ -17,7 +17,7 @@ class handler(BaseHTTPRequestHandler):
 
             result = (
                 sb.table("transcripts")
-                .select("id, url, title, generated_title, creator, thumbnail_url, duration, categories, status, review_status, review_notes, notes, attachments, created_at")
+                .select("id, url, title, generated_title, creator, thumbnail_url, duration, categories, status, review_status, review_notes, notes, attachments, rating, created_at")
                 .eq("status", "completed")
                 .order("created_at", desc=True)
                 .limit(50)
