@@ -5,6 +5,7 @@ import os
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from supabase import create_client
+from api._shared import check_auth, set_cors_headers
 
 
 SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip()
@@ -52,13 +53,21 @@ def extract_categories(aai_result: dict) -> list:
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        origin = self.headers.get("Origin")
+
+        # Auth check
+        auth_error = check_auth(self.headers)
+        if auth_error:
+            self._respond(401, {"error": auth_error}, origin)
+            return
+
         try:
             # Parse query params
             query = parse_qs(urlparse(self.path).query)
             record_id = query.get("id", [None])[0]
 
             if not record_id:
-                self._respond(400, {"error": "id parameter is required"})
+                self._respond(400, {"error": "id parameter is required"}, origin)
                 return
 
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -67,20 +76,20 @@ class handler(BaseHTTPRequestHandler):
             result = sb.table("transcripts").select("*").eq("id", record_id).execute()
 
             if not result.data:
-                self._respond(404, {"error": "Transcript not found"})
+                self._respond(404, {"error": "Transcript not found"}, origin)
                 return
 
             record = result.data[0]
 
             # If already completed, return it
             if record["status"] == "completed":
-                self._respond(200, record)
+                self._respond(200, record, origin)
                 return
 
             # Check AssemblyAI status
             aai_id = record.get("assemblyai_id")
             if not aai_id:
-                self._respond(500, {"error": "No AssemblyAI ID found"})
+                self._respond(500, {"error": "No AssemblyAI ID found"}, origin)
                 return
 
             aai_result = check_assemblyai(aai_id)
@@ -121,25 +130,31 @@ class handler(BaseHTTPRequestHandler):
 
                 # Return full record
                 record.update(update_data)
-                self._respond(200, record)
+                self._respond(200, record, origin)
 
             elif aai_status == "error":
                 error_msg = aai_result.get("error", "Transcription failed")
                 sb.table("transcripts").update({
                     "status": "error"
                 }).eq("id", record_id).execute()
-                self._respond(200, {"status": "error", "error": error_msg})
+                self._respond(200, {"status": "error", "error": error_msg}, origin)
 
             else:
                 # Still processing
-                self._respond(200, {"status": "processing", "id": record_id})
+                self._respond(200, {"status": "processing", "id": record_id}, origin)
 
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            self._respond(500, {"error": str(e)}, origin)
 
-    def _respond(self, status, data):
+    def do_OPTIONS(self):
+        origin = self.headers.get("Origin")
+        self.send_response(200)
+        set_cors_headers(self, origin, "GET, OPTIONS")
+        self.end_headers()
+
+    def _respond(self, status, data, origin=None):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        set_cors_headers(self, origin, "GET, OPTIONS")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())

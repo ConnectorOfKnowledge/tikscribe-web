@@ -6,6 +6,7 @@ import sys
 import subprocess
 import traceback
 from http.server import BaseHTTPRequestHandler
+from api._shared import check_auth, set_cors_headers
 
 
 SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip()
@@ -152,6 +153,14 @@ def submit_to_assemblyai(audio_url: str) -> str:
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        origin = self.headers.get("Origin")
+
+        # Auth check
+        auth_error = check_auth(self.headers)
+        if auth_error:
+            self._respond(401, {"error": auth_error}, origin)
+            return
+
         step = "init"
         try:
             # Parse request body
@@ -161,7 +170,7 @@ class handler(BaseHTTPRequestHandler):
             url = body.get("url", "").strip()
 
             if not url:
-                self._respond(400, {"error": "URL is required"})
+                self._respond(400, {"error": "URL is required"}, origin)
                 return
 
             # Validate env vars
@@ -176,7 +185,7 @@ class handler(BaseHTTPRequestHandler):
             if missing:
                 self._respond(500, {
                     "error": f"Server misconfigured - missing: {', '.join(missing)}"
-                })
+                }, origin)
                 return
 
             # Step 1: Get video info + download URL
@@ -238,24 +247,23 @@ class handler(BaseHTTPRequestHandler):
                 "assemblyai_id": aai_id,
                 "title": title,
                 "status": "processing",
-            })
+            }, origin)
 
         except Exception as e:
             tb = traceback.format_exc()
             print(f"[ERROR] Failed at '{step}': {str(e)}\n{tb}", file=sys.stderr)
             error_msg = f"Failed at '{step}': {str(e)}"
-            self._respond(500, {"error": error_msg})
+            self._respond(500, {"error": error_msg}, origin)
 
     def do_OPTIONS(self):
+        origin = self.headers.get("Origin")
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        set_cors_headers(self, origin, "POST, OPTIONS")
         self.end_headers()
 
-    def _respond(self, status, data):
+    def _respond(self, status, data, origin=None):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        set_cors_headers(self, origin, "POST, OPTIONS")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())

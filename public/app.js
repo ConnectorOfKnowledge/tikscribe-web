@@ -3,6 +3,19 @@
 // Detect native app (Capacitor) vs web — API calls need full URL in native
 const isNative = window.Capacitor !== undefined;
 const API_BASE = isNative ? 'https://tikscribe-web.vercel.app/api' : '/api';
+
+// API auth key -- set via TIKSCRIBE_API_KEY env var on Vercel
+// When empty string, backend skips auth (for initial setup)
+const API_KEY = '';
+
+function apiHeaders(extra = {}) {
+    const headers = { 'Content-Type': 'application/json', ...extra };
+    if (API_KEY) {
+        headers['Authorization'] = `Bearer ${API_KEY}`;
+    }
+    return headers;
+}
+
 let currentTranscript = null;
 let pendingFiles = []; // files queued for upload
 let editAttachments = []; // attachments being edited
@@ -181,7 +194,7 @@ async function submitUrl() {
 
         const res = await fetch(`${API_BASE}/transcribe`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders(),
             body: JSON.stringify(payload)
         });
 
@@ -213,7 +226,9 @@ async function pollStatus(id) {
         await sleep(5000); // Check every 5 seconds
 
         try {
-            const res = await fetch(`${API_BASE}/status?id=${id}`);
+            const res = await fetch(`${API_BASE}/status?id=${id}`, {
+                headers: apiHeaders()
+            });
             const data = await res.json();
 
             if (data.status === 'completed') {
@@ -327,7 +342,9 @@ function showResult(data, isNewSubmission = false) {
 
 async function loadHistory() {
     try {
-        const res = await fetch(`${API_BASE}/history`);
+        const res = await fetch(`${API_BASE}/history`, {
+            headers: apiHeaders()
+        });
         if (!res.ok) return;
         const data = await res.json();
 
@@ -448,7 +465,9 @@ async function viewTranscript(data) {
     setStatus('Loading...', 'Fetching transcript');
 
     try {
-        const res = await fetch(`${API_BASE}/status?id=${data.id}`);
+        const res = await fetch(`${API_BASE}/status?id=${data.id}`, {
+            headers: apiHeaders()
+        });
         const full = await res.json();
         if (full.transcript) {
             showResult(full);
@@ -525,7 +544,7 @@ async function saveEdit() {
     try {
         const res = await fetch(`${API_BASE}/review`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiHeaders(),
             body: JSON.stringify({
                 id: currentTranscript.id,
                 review_status: currentTranscript.review_status || null,
