@@ -1,5 +1,15 @@
 {
   "appId": "com.tikscribe.app",
   "appName": "tikscribe",
-  "webDir": "public"
+  "webDir": "public",
+  "server": {
+    "allowNavigation": [
+      "tikscribe-web.vercel.app"
+    ]
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
 }
