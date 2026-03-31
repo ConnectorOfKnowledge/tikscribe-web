@@ -17,10 +17,13 @@ def get_cors_origin(request_origin: str | None) -> str | None:
 
     Allows:
     - The production domain exactly
+    - Capacitor/localhost origins (Android app)
     - Any Vercel preview deployment (*.vercel.app)
+    - Null or missing origin (Android WebView in Capacitor)
     """
-    if not request_origin:
-        return None
+    if not request_origin or request_origin == "null":
+        # Android WebView in Capacitor may send no origin or "null"
+        return "*"
 
     # Exact match on allowed list
     if request_origin in ALLOWED_ORIGINS:
