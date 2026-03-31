@@ -5,6 +5,8 @@ import os
 # Allowed origins for CORS
 ALLOWED_ORIGINS = [
     "https://tikscribe-web.vercel.app",
+    "capacitor://localhost",
+    "http://localhost",
 ]
 
 TIKSCRIBE_API_KEY = (os.environ.get("TIKSCRIBE_API_KEY") or "").strip()
