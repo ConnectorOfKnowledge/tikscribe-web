@@ -25,6 +25,9 @@ def run_gemini_analysis(video_url: str) -> str | None:
 
         req = urllib.request.Request(video_url, headers={"User-Agent": "tikscribe/1.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
+            content_length = int(resp.headers.get("Content-Length") or 0)
+            if content_length > 20_000_000:
+                return None
             video_bytes = resp.read()
             if len(video_bytes) > 20_000_000:
                 return None
