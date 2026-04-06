@@ -8,6 +8,9 @@
     },
     "api/process_queue.py": {
       "maxDuration": 60
+    },
+    "api/analyze_visual.py": {
+      "maxDuration": 60
     }
   },
   "crons": [
