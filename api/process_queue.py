@@ -90,37 +90,41 @@ def extract_categories(aai_result: dict) -> list:
     return categories
 
 
-def run_gemini_visual(video_url: str) -> str | None:
-    """Run Gemini visual analysis on a video URL. Returns summary or None."""
+def run_gemini_analysis(video_url: str) -> str | None:
+    """Run full Gemini analysis on a video (audio + visual). Returns summary or None."""
     if not GEMINI_KEY:
         return None
 
     try:
         from google import genai
+        import urllib.request
+        import base64
 
         client = genai.Client(api_key=GEMINI_KEY)
 
-        # Download video bytes (TikTok URLs require direct download)
-        import urllib.request
         req = urllib.request.Request(video_url, headers={"User-Agent": "tikscribe/1.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             video_bytes = resp.read()
-            # Cap at 20MB to stay within serverless memory limits
             if len(video_bytes) > 20_000_000:
                 return None
+
+        video_b64 = base64.b64encode(video_bytes).decode("utf-8")
 
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=[
                 {
                     "parts": [
-                        {"inline_data": {"mime_type": "video/mp4", "data": video_bytes}},
+                        {"inline_data": {"mime_type": "video/mp4", "data": video_b64}},
                         {"text": (
-                            "Analyze this video completely. "
-                            "1) Extract ALL text shown on screen (titles, captions, bullet points, slides). "
-                            "2) Describe what is visually happening. "
-                            "3) If there are step-by-step instructions, list them. "
-                            "4) Provide a concise summary of the full content."
+                            "Watch and listen to this entire video. Provide a complete analysis:\n"
+                            "1) TRANSCRIPT: Write out everything spoken in the video.\n"
+                            "2) ON-SCREEN TEXT: Extract ALL text shown on screen "
+                            "(titles, captions, bullet points, slides, URLs).\n"
+                            "3) VISUAL DESCRIPTION: Describe what is visually happening.\n"
+                            "4) KEY TAKEAWAYS: If there are step-by-step instructions, "
+                            "tips, or actionable items, list them.\n"
+                            "5) SUMMARY: A concise 2-3 sentence summary of the full content."
                         )},
                     ]
                 }
@@ -128,7 +132,7 @@ def run_gemini_visual(video_url: str) -> str | None:
         )
         return response.text
     except Exception as e:
-        print(f"[WARN] Gemini visual analysis failed: {e}", file=sys.stderr)
+        print(f"[WARN] Gemini analysis failed: {e}", file=sys.stderr)
         return None
 
 
@@ -202,8 +206,8 @@ def process_one(sb, record: dict) -> dict:
         "language": aai_result.get("language_code", "en"),
     }
 
-    # Run Gemini visual analysis
-    visual = run_gemini_visual(direct_url)
+    # Run Gemini full analysis (audio + visual)
+    visual = run_gemini_analysis(direct_url)
     if visual:
         update_data["visual_summary"] = visual
         update_data["visual_status"] = "completed"
