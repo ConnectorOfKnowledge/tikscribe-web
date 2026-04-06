@@ -3,6 +3,7 @@
   "appName": "tikscribe",
   "webDir": "public",
   "server": {
+    "url": "https://tikscribe-web.vercel.app",
     "allowNavigation": [
       "tikscribe-web.vercel.app"
     ]
