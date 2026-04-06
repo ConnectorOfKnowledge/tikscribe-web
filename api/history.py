@@ -1,4 +1,4 @@
-"""API route: List saved transcripts."""
+"""API route: List saved transcripts (all statuses for queue visibility)."""
 
 import json
 import os
@@ -15,7 +15,6 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         origin = self.headers.get("Origin")
 
-        # Auth check
         auth_error = check_auth(self.headers)
         if auth_error:
             self._respond(401, {"error": auth_error}, origin)
@@ -26,8 +25,13 @@ class handler(BaseHTTPRequestHandler):
 
             result = (
                 sb.table("transcripts")
-                .select("id, url, title, generated_title, creator, thumbnail_url, duration, categories, status, review_status, review_notes, notes, attachments, rating, created_at")
-                .eq("status", "completed")
+                .select(
+                    "id, url, title, generated_title, creator, thumbnail_url, "
+                    "duration, categories, status, review_status, review_notes, "
+                    "notes, attachments, rating, visual_status, has_visual_content, "
+                    "reviewed_at, reviewed_via, created_at"
+                )
+                .in_("status", ["completed", "queued", "processing", "failed"])
                 .order("created_at", desc=True)
                 .limit(50)
                 .execute()

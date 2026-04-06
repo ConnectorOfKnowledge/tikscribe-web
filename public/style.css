@@ -1078,6 +1078,80 @@ header h1 {
     width: 100%;
 }
 
+/* Visual Analysis Box */
+.visual-box {
+    background: #0d1520;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-left: 3px solid #48bb78;
+}
+
+.visual-box h3 {
+    font-size: 0.85rem;
+    color: #48bb78;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.visual-box div {
+    line-height: 1.7;
+    font-size: 0.95rem;
+    color: #ccc;
+    white-space: pre-wrap;
+}
+
+/* Status badges for queued/processing items */
+.status-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 8px;
+    margin-left: 8px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.queued {
+    background: rgba(74, 108, 247, 0.15);
+    color: #7da4f7;
+}
+
+.status-badge.processing {
+    background: rgba(246, 173, 85, 0.15);
+    color: #f6ad55;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.status-badge.failed {
+    background: rgba(229, 62, 62, 0.15);
+    color: #fc8181;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.history-item.pending {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.history-item.pending:hover {
+    border-color: #2a2a35;
+}
+
+/* Confirmation sub-text */
+.confirm-sub {
+    color: #555;
+    font-size: 0.8rem;
+    margin-bottom: 20px;
+}
+
 /* Responsive */
 @media (max-width: 500px) {
     .input-group {

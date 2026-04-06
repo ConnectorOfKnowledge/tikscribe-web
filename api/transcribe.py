@@ -1,9 +1,8 @@
-"""API route: Submit a URL for transcription."""
+"""API route: Submit a URL for transcription (queue-based, instant return)."""
 
 import json
 import os
 import sys
-import subprocess
 import traceback
 from http.server import BaseHTTPRequestHandler
 from api._shared import check_auth, set_cors_headers
@@ -11,7 +10,6 @@ from api._shared import check_auth, set_cors_headers
 
 SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip()
 SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
-ASSEMBLYAI_KEY = (os.environ.get("ASSEMBLYAI_API_KEY") or "").strip()
 
 
 def get_tiktok_info(url: str) -> dict:
@@ -37,7 +35,6 @@ def get_tiktok_info(url: str) -> dict:
 
     d = result["data"]
 
-    # Get proxied download URL (accessible from any IP)
     play_url = d.get("hdplay") or d.get("play") or ""
     if play_url and not play_url.startswith("http"):
         play_url = "https://tikwm.com" + play_url
@@ -56,7 +53,7 @@ def get_tiktok_info(url: str) -> dict:
 
 
 def get_ytdlp_info(url: str) -> dict:
-    """Get video info and direct URL via yt-dlp (for YouTube, etc.)."""
+    """Get video info via yt-dlp (for YouTube, etc.). No download needed."""
     import yt_dlp
 
     ydl_opts = {
@@ -64,12 +61,12 @@ def get_ytdlp_info(url: str) -> dict:
         "no_warnings": True,
         "noplaylist": True,
         "no_check_formats": True,
+        "socket_timeout": 15,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
 
-    # Get direct media URL
     direct_url = info.get("url", "")
     if not direct_url:
         formats = info.get("formats", [])
@@ -82,16 +79,13 @@ def get_ytdlp_info(url: str) -> dict:
             else:
                 direct_url = formats[-1].get("url", "")
 
-    if not direct_url:
-        raise RuntimeError("Could not extract media URL from yt-dlp")
-
     return {
         "title": info.get("title", "Untitled"),
         "creator": info.get("uploader", info.get("creator", "Unknown")),
         "thumbnail_url": info.get("thumbnail", ""),
         "duration": int(info.get("duration", 0)),
         "description": info.get("description", ""),
-        "direct_url": direct_url,
+        "direct_url": direct_url or "",
     }
 
 
@@ -103,59 +97,10 @@ def get_video_info(url: str) -> dict:
         return get_ytdlp_info(url)
 
 
-IAB_SUPPORTED_LANGUAGES = {"de", "en", "es", "fr", "hi", "it", "nl", "pt"}
-
-
-def submit_to_assemblyai(audio_url: str) -> str:
-    """Submit audio URL to AssemblyAI for transcription.
-
-    First attempts with iab_categories enabled. If AssemblyAI rejects the
-    request due to an unsupported language, retries without iab_categories.
-    """
-    import urllib.request
-    import urllib.error
-
-    def _submit(payload: dict) -> str:
-        req_data = json.dumps(payload).encode()
-        req = urllib.request.Request(
-            "https://api.assemblyai.com/v2/transcript",
-            data=req_data,
-            headers={
-                "Authorization": ASSEMBLYAI_KEY,
-                "Content-Type": "application/json",
-            },
-        )
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            return result["id"]
-
-    payload = {
-        "audio_url": audio_url,
-        "speech_models": ["universal-2"],
-        "iab_categories": True,
-        "auto_chapters": True,
-    }
-
-    try:
-        return _submit(payload)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        # If the error is about iab_categories language support, retry without it
-        if "iab_categories" in body.lower() and "language" in body.lower():
-            payload["iab_categories"] = False
-            try:
-                return _submit(payload)
-            except urllib.error.HTTPError as e2:
-                body2 = e2.read().decode()
-                raise RuntimeError(f"AssemblyAI error {e2.code}: {body2[:500]}")
-        raise RuntimeError(f"AssemblyAI error {e.code}: {body[:500]}")
-
-
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         origin = self.headers.get("Origin")
 
-        # Auth check
         auth_error = check_auth(self.headers)
         if auth_error:
             self._respond(401, {"error": auth_error}, origin)
@@ -163,7 +108,6 @@ class handler(BaseHTTPRequestHandler):
 
         step = "init"
         try:
-            # Parse request body
             step = "parsing request"
             content_length = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(content_length))
@@ -173,34 +117,14 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(400, {"error": "URL is required"}, origin)
                 return
 
-            # Validate env vars
             step = "checking config"
-            missing = []
-            if not ASSEMBLYAI_KEY:
-                missing.append("ASSEMBLYAI_API_KEY")
-            if not SUPABASE_URL:
-                missing.append("SUPABASE_URL")
-            if not SUPABASE_KEY:
-                missing.append("SUPABASE_SERVICE_KEY")
-            if missing:
-                self._respond(500, {
-                    "error": f"Server misconfigured - missing: {', '.join(missing)}"
-                }, origin)
+            if not SUPABASE_URL or not SUPABASE_KEY:
+                self._respond(500, {"error": "Server misconfigured"}, origin)
                 return
 
-            # Step 1: Get video info + download URL
+            # Get basic video info (title, creator, thumbnail) -- fast, 2-3s
             step = "getting video info"
             info = get_video_info(url)
-            title = info["title"]
-            creator = info["creator"]
-            thumbnail_url = info["thumbnail_url"]
-            duration = info["duration"]
-            description = info["description"]
-            direct_url = info["direct_url"]
-
-            # Step 2: Submit to AssemblyAI
-            step = "submitting to AssemblyAI"
-            aai_id = submit_to_assemblyai(direct_url)
 
             # Get optional notes, attachments, and rating
             notes = body.get("notes", "").strip() or None
@@ -210,26 +134,26 @@ class handler(BaseHTTPRequestHandler):
                 if rating < 1 or rating > 5:
                     rating = None
             attachments = body.get("attachments", None)
-            # Validate attachments (max 5, max 2MB each)
             if attachments:
                 attachments = attachments[:5]
                 for att in attachments:
-                    if len(att.get("data", "")) > 2_800_000:  # ~2MB base64
+                    if len(att.get("data", "")) > 2_800_000:
                         att["data"] = att["data"][:100] + "...[truncated]"
 
-            # Step 3: Save to Supabase
-            step = "saving to Supabase"
+            # Save to Supabase as queued -- processing happens in background cron
+            step = "saving to queue"
             from supabase import create_client
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
             insert_data = {
                 "url": url,
-                "title": title,
-                "creator": creator,
-                "thumbnail_url": thumbnail_url,
-                "duration": duration,
-                "description": description,
-                "status": "processing",
-                "assemblyai_id": aai_id,
+                "title": info["title"],
+                "creator": info["creator"],
+                "thumbnail_url": info["thumbnail_url"],
+                "duration": info["duration"],
+                "description": info["description"],
+                "direct_url": info["direct_url"],
+                "status": "queued",
             }
             if notes:
                 insert_data["notes"] = notes
@@ -239,21 +163,18 @@ class handler(BaseHTTPRequestHandler):
                 insert_data["attachments"] = attachments
 
             record = sb.table("transcripts").insert(insert_data).execute()
-
             row_id = record.data[0]["id"]
 
             self._respond(200, {
                 "id": row_id,
-                "assemblyai_id": aai_id,
-                "title": title,
-                "status": "processing",
+                "title": info["title"],
+                "status": "queued",
             }, origin)
 
         except Exception as e:
             tb = traceback.format_exc()
             print(f"[ERROR] Failed at '{step}': {str(e)}\n{tb}", file=sys.stderr)
-            error_msg = f"Failed at '{step}': {str(e)}"
-            self._respond(500, {"error": error_msg}, origin)
+            self._respond(500, {"error": f"Failed at '{step}': {str(e)}"}, origin)
 
     def do_OPTIONS(self):
         origin = self.headers.get("Origin")

@@ -5,8 +5,17 @@
     },
     "api/status.py": {
       "maxDuration": 30
+    },
+    "api/process_queue.py": {
+      "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/process_queue",
+      "schedule": "0 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/public/$1" }

@@ -10,34 +10,31 @@
     <div class="container">
         <header>
             <h1>tikscribe</h1>
-            <p class="subtitle">Paste a URL. Get a transcript.</p>
+            <p class="subtitle">Capture. Process. Review.</p>
         </header>
 
         <!-- Submit Form -->
         <section id="submit-section">
             <div class="input-group">
                 <input type="url" id="url-input" placeholder="Paste TikTok or YouTube URL..." autocomplete="off">
-                <button id="submit-btn" onclick="submitUrl()">Transcribe</button>
+                <button id="submit-btn" onclick="submitUrl()">Send</button>
             </div>
-            <p class="hint">Works with TikTok, YouTube, Instagram Reels, and more</p>
+            <p class="hint">Share from TikTok, YouTube, Instagram Reels, and more</p>
 
-            <!-- Notes -->
-            <textarea id="notes-input" placeholder="Add notes... (optional)" rows="2"></textarea>
+            <textarea id="notes-input" placeholder="Add notes for Iris... (optional)" rows="2"></textarea>
 
-            <!-- Rating -->
             <div class="rating-input" id="rating-input">
                 <span class="rating-label">Priority:</span>
                 <div class="star-rating" id="star-rating">
-                    <button type="button" class="star" data-value="1" onclick="setRating(1)" title="1 - Rarely look at">&#9733;</button>
-                    <button type="button" class="star" data-value="2" onclick="setRating(2)" title="2 - Low priority">&#9733;</button>
-                    <button type="button" class="star" data-value="3" onclick="setRating(3)" title="3 - Maybe look at">&#9733;</button>
-                    <button type="button" class="star" data-value="4" onclick="setRating(4)" title="4 - Group together">&#9733;</button>
+                    <button type="button" class="star" data-value="1" onclick="setRating(1)" title="1 - Low">&#9733;</button>
+                    <button type="button" class="star" data-value="2" onclick="setRating(2)" title="2 - Below average">&#9733;</button>
+                    <button type="button" class="star" data-value="3" onclick="setRating(3)" title="3 - Normal">&#9733;</button>
+                    <button type="button" class="star" data-value="4" onclick="setRating(4)" title="4 - Important">&#9733;</button>
                     <button type="button" class="star" data-value="5" onclick="setRating(5)" title="5 - Must address">&#9733;</button>
                 </div>
                 <button type="button" class="rating-clear" id="rating-clear" onclick="setRating(0)" title="Clear rating">&times;</button>
             </div>
 
-            <!-- File Upload -->
             <div class="upload-area" id="upload-area">
                 <input type="file" id="file-input" accept="image/*" multiple hidden>
                 <button class="btn-upload" onclick="document.getElementById('file-input').click()">
@@ -48,25 +45,18 @@
             </div>
         </section>
 
-        <!-- Processing Status -->
+        <!-- Processing Status (used when viewing a transcript) -->
         <section id="status-section" class="hidden">
             <div class="status-card">
                 <div class="spinner"></div>
-                <p id="status-text">Submitting...</p>
+                <p id="status-text">Loading...</p>
                 <p id="status-detail" class="detail"></p>
             </div>
         </section>
 
-        <!-- Result -->
+        <!-- Result View -->
         <section id="result-section" class="hidden">
             <div class="result-card">
-                <div id="success-banner" class="success-banner hidden">
-                    <span class="success-check">✓</span>
-                    <div class="success-content">
-                        <strong>Saved!</strong>
-                        <span id="success-summary"></span>
-                    </div>
-                </div>
                 <div class="result-header">
                     <img id="result-thumb" class="thumbnail" alt="Video thumbnail">
                     <div>
@@ -85,13 +75,17 @@
                     <div id="result-attachments" class="attachment-grid"></div>
                 </div>
                 <div class="transcript-box">
-                    <h3>Transcript</h3>
+                    <h3>Audio Transcript</h3>
                     <div id="result-transcript"></div>
+                </div>
+                <div id="result-visual-box" class="visual-box hidden">
+                    <h3>Visual Analysis</h3>
+                    <div id="result-visual"></div>
                 </div>
                 <div id="result-actions" class="result-actions">
                     <button class="btn-secondary" onclick="copyTranscript()">Copy</button>
                     <button class="btn-secondary" onclick="toggleEdit()">Edit</button>
-                    <button class="btn-primary" onclick="resetForm()">New Entry</button>
+                    <button class="btn-primary" onclick="backToList()">Back</button>
                 </div>
                 <!-- Edit Panel -->
                 <div id="edit-panel" class="edit-panel hidden">
@@ -111,7 +105,7 @@
             </div>
         </section>
 
-        <!-- Active Transcripts (unreviewed) -->
+        <!-- Pending Review -->
         <section id="history-section">
             <h2 class="section-title">Pending Review</h2>
             <div id="history-list" class="history-list">
@@ -119,7 +113,7 @@
             </div>
         </section>
 
-        <!-- Archived Transcripts (reviewed) -->
+        <!-- Archive -->
         <section id="archive-section" style="display: none;">
             <h2 class="section-title archive-title" onclick="toggleArchive()">
                 Archive
@@ -175,9 +169,10 @@
     <div id="confirm-overlay" class="confirm-overlay hidden" onclick="dismissConfirmation(event)">
         <div class="confirm-modal">
             <div class="confirm-icon">&#10003;</div>
-            <h2>Transcription Saved!</h2>
+            <h2>Queued!</h2>
             <p id="confirm-details" class="confirm-details"></p>
-            <button class="btn-primary confirm-btn" onclick="acknowledgeConfirmation()">Start New Entry</button>
+            <p class="confirm-sub">Processing happens in the background. Check The Bridge for results.</p>
+            <button class="btn-primary confirm-btn" onclick="acknowledgeConfirmation()">Send Another</button>
         </div>
     </div>
 
