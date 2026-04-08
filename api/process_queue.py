@@ -386,7 +386,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             tb = traceback.format_exc()
             print(f"[ERROR] Queue processing failed: {type(e).__name__}: {e}\n{tb}", file=sys.stderr)
-            self._respond(500, {"error": f"{type(e).__name__}: {e}"})
+            self._respond(500, {"error": f"{type(e).__name__}: {e}", "trace": tb})
 
     def do_OPTIONS(self):
         self.send_response(200)
