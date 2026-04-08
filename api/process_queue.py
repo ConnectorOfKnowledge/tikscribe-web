@@ -135,55 +135,60 @@ def run_gemini_analysis(video_url: str) -> str | None:
         )
         return response.text
     except Exception as e:
-        print(f"[WARN] Gemini analysis failed: {e}", file=sys.stderr)
+        print(f"[WARN] Gemini failed ({type(e).__name__}): {e}", file=sys.stderr)
         return None
 
 
-def process_one(sb, record: dict) -> dict:
-    """Process a single queued transcript. Returns status info."""
-    record_id = record["id"]
-    result = {"id": record_id, "status": "completed"}
+def submit_one(sb, record: dict) -> dict:
+    """Submit a single queued transcript to AssemblyAI. Fast (~1-2s per item).
 
-    # Mark as processing and increment retry count
-    retry_count = (record.get("retry_count") or 0) + 1
-    sb.table("transcripts").update({
-        "status": "processing",
-        "retry_count": retry_count,
-    }).eq("id", record_id).execute()
+    Only called for records without an existing assemblyai_id (the handler
+    short-circuits records that already have one).
+    """
+    record_id = record["id"]
 
     direct_url = record.get("direct_url", "")
     if not direct_url:
         sb.table("transcripts").update({"status": "failed"}).eq("id", record_id).execute()
         return {"id": record_id, "status": "failed", "error": "No download URL"}
 
-    # Check if AssemblyAI job already exists (resume from previous timeout)
-    existing = sb.table("transcripts").select("assemblyai_id").eq("id", record_id).execute()
-    aai_id = (existing.data[0].get("assemblyai_id") if existing.data else None)
+    retry_count = (record.get("retry_count") or 0) + 1
+    sb.table("transcripts").update({
+        "status": "processing",
+        "retry_count": retry_count,
+    }).eq("id", record_id).execute()
 
-    if not aai_id:
-        # Submit to AssemblyAI (first attempt)
-        try:
-            aai_id = submit_to_assemblyai(direct_url)
-            sb.table("transcripts").update({"assemblyai_id": aai_id}).eq("id", record_id).execute()
-        except Exception as e:
-            sb.table("transcripts").update({"status": "failed"}).eq("id", record_id).execute()
-            return {"id": record_id, "status": "failed", "error": str(e)}
+    try:
+        aai_id = submit_to_assemblyai(direct_url)
+        sb.table("transcripts").update({"assemblyai_id": aai_id}).eq("id", record_id).execute()
+    except Exception as e:
+        sb.table("transcripts").update({"status": "failed"}).eq("id", record_id).execute()
+        return {"id": record_id, "status": "failed", "error": str(e)}
 
-    # Poll AssemblyAI (up to ~35s to leave headroom for Gemini)
-    import time
-    aai_result = None
-    for _ in range(7):
-        time.sleep(5)
+    return {"id": record_id, "status": "submitted", "assemblyai_id": aai_id}
+
+
+def complete_one(sb, record_id: str, aai_id: str, direct_url: str,
+                  time_remaining: float = 999) -> dict:
+    """Check AssemblyAI result and finalize a transcript.
+
+    Two-step save: transcript data is written first, then Gemini visual
+    analysis is attempted separately. This prevents a Gemini timeout from
+    losing the already-completed transcript.
+    """
+    try:
         aai_result = check_assemblyai(aai_id)
-        if aai_result.get("status") in ("completed", "error"):
-            break
+    except Exception as e:
+        print(f"[WARN] AssemblyAI check failed ({type(e).__name__}): {e}", file=sys.stderr)
+        return {"id": record_id, "status": "check_failed", "error": str(e)}
 
-    if not aai_result or aai_result.get("status") != "completed":
-        # Not done yet -- will be picked up by status.py or next cron run
-        sb.table("transcripts").update({"status": "processing"}).eq("id", record_id).execute()
+    if aai_result.get("status") == "error":
+        sb.table("transcripts").update({"status": "failed"}).eq("id", record_id).execute()
+        return {"id": record_id, "status": "failed", "error": "AssemblyAI transcription failed"}
+
+    if aai_result.get("status") != "completed":
         return {"id": record_id, "status": "still_processing"}
 
-    # Extract audio results
     transcript_text = aai_result.get("text", "")
     categories = extract_categories(aai_result)
     generated_title = ""
@@ -200,32 +205,49 @@ def process_one(sb, record: dict) -> dict:
             "headline": chapter.get("headline", ""),
         })
 
-    update_data = {
+    # Step 1: Save transcript data immediately (safe checkpoint)
+    sb.table("transcripts").update({
         "status": "completed",
         "transcript": transcript_text,
         "generated_title": generated_title,
         "categories": categories,
         "segments": segments,
         "language": aai_result.get("language_code", "en"),
-    }
+    }).eq("id", record_id).execute()
 
-    # Run Gemini full analysis (audio + visual)
-    visual = run_gemini_analysis(direct_url)
-    if visual:
-        update_data["visual_summary"] = visual
-        update_data["visual_status"] = "completed"
-        update_data["has_visual_content"] = True
+    # Step 2: Gemini visual analysis (only if enough time remains)
+    if time_remaining > 60:
+        visual = run_gemini_analysis(direct_url)
+        if visual:
+            sb.table("transcripts").update({
+                "visual_summary": visual,
+                "visual_status": "completed",
+                "has_visual_content": True,
+            }).eq("id", record_id).execute()
+        else:
+            sb.table("transcripts").update({
+                "visual_status": "skipped" if not GEMINI_KEY else "failed",
+            }).eq("id", record_id).execute()
     else:
-        update_data["visual_status"] = "skipped" if not GEMINI_KEY else "failed"
+        sb.table("transcripts").update({
+            "visual_status": "deferred",
+        }).eq("id", record_id).execute()
 
-    sb.table("transcripts").update(update_data).eq("id", record_id).execute()
-    return result
+    return {"id": record_id, "status": "completed"}
 
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        """Cron endpoint: process queued transcripts."""
-        # Verify cron secret (always required)
+        """Cron endpoint: process queued transcripts.
+
+        Two-phase approach to maximize throughput within the 300s timeout:
+        Phase 1 (~10-20s): Submit all queued items to AssemblyAI (instant per item).
+        Phase 2 (~250s): Poll submitted items and finalize with Gemini analysis.
+        Items not finished in this window stay as 'processing' for the next run.
+        """
+        import time
+        start_time = time.time()
+
         auth = self.headers.get("Authorization", "")
         if not CRON_SECRET or auth != f"Bearer {CRON_SECRET}":
             self._respond(401, {"error": "Unauthorized"})
@@ -235,16 +257,14 @@ class handler(BaseHTTPRequestHandler):
             from supabase import create_client
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-            # Get one queued item (process one at a time to stay within timeout)
-            # Also pick up items stuck in 'processing' (previous run timed out)
-            # Skip items with 3+ retries
+            # Fetch all queued + stuck-processing items (up to 20)
             queued = (
                 sb.table("transcripts")
-                .select("id, url, direct_url, retry_count")
+                .select("id, url, direct_url, retry_count, assemblyai_id")
                 .in_("status", ["queued", "processing"])
                 .lt("retry_count", 3)
                 .order("created_at")
-                .limit(1)
+                .limit(20)
                 .execute()
             )
 
@@ -252,17 +272,56 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(200, {"processed": 0, "message": "No queued items"})
                 return
 
-            record = queued.data[0]
+            results = []
+            newly_submitted = 0
 
-            # Cap retries at 3
-            if (record.get("retry_count") or 0) >= 3:
-                sb.table("transcripts").update({"status": "failed"}).eq("id", record["id"]).execute()
-                self._respond(200, {"processed": 0, "message": "Item exceeded retry limit"})
-                return
+            # Phase 1: Submit all items to AssemblyAI (fast, ~1-2s each)
+            submitted = []  # (record_id, aai_id, direct_url)
+            for record in queued.data:
+                aai_id = record.get("assemblyai_id")
+                if aai_id:
+                    submitted.append((record["id"], aai_id, record.get("direct_url", "")))
+                    continue
 
-            result = process_one(sb, record)
+                res = submit_one(sb, record)
+                results.append(res)
+                if res.get("assemblyai_id"):
+                    submitted.append((record["id"], res["assemblyai_id"], record.get("direct_url", "")))
+                    newly_submitted += 1
 
-            self._respond(200, {"processed": 1, "result": result})
+            # Phase 2: Poll and complete submitted items
+            # Only sleep if we freshly submitted items (resumed ones are already done)
+            if newly_submitted > 0:
+                time.sleep(10)
+
+            for record_id, aai_id, direct_url in submitted:
+                elapsed = time.time() - start_time
+                time_remaining = 300 - elapsed
+                if time_remaining < 30:
+                    results.append({"id": record_id, "status": "deferred_timeout"})
+                    continue
+
+                res = complete_one(sb, record_id, aai_id, direct_url,
+                                   time_remaining=time_remaining)
+                results.append(res)
+
+                # If still processing, poll up to 6 more times (30s)
+                retries = 0
+                while res["status"] == "still_processing" and retries < 6:
+                    if (time.time() - start_time) > 250:
+                        break
+                    time.sleep(5)
+                    time_remaining = 300 - (time.time() - start_time)
+                    res = complete_one(sb, record_id, aai_id, direct_url,
+                                       time_remaining=time_remaining)
+                    results[-1] = res
+                    retries += 1
+
+            self._respond(200, {
+                "processed": len([r for r in results if r.get("status") == "completed"]),
+                "total": len(results),
+                "results": results,
+            })
 
         except Exception as e:
             tb = traceback.format_exc()

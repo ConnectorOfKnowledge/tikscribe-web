@@ -7,7 +7,7 @@
       "maxDuration": 30
     },
     "api/process_queue.py": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/analyze_visual.py": {
       "maxDuration": 60
