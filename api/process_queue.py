@@ -116,8 +116,8 @@ def check_assemblyai(aai_id: str) -> dict:
 def extract_categories(aai_result: dict) -> list:
     """Extract top IAB categories from AssemblyAI result."""
     categories = []
-    iab = aai_result.get("iab_categories_result", {})
-    summary = iab.get("summary", {})
+    iab = aai_result.get("iab_categories_result") or {}
+    summary = iab.get("summary") or {}
 
     for label, score in sorted(summary.items(), key=lambda x: x[1], reverse=True):
         if score > 0.3 and len(categories) < 5:
@@ -242,10 +242,10 @@ def complete_one(sb, record_id: str, aai_id: str, direct_url: str,
     if aai_result.get("status") != "completed":
         return {"id": record_id, "status": "still_processing"}
 
-    transcript_text = aai_result.get("text", "")
+    transcript_text = aai_result.get("text") or ""
     categories = extract_categories(aai_result)
     generated_title = ""
-    chapters = aai_result.get("chapters", [])
+    chapters = aai_result.get("chapters") or []
     if chapters:
         generated_title = chapters[0].get("headline", "")
 
@@ -386,7 +386,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             tb = traceback.format_exc()
             print(f"[ERROR] Queue processing failed: {type(e).__name__}: {e}\n{tb}", file=sys.stderr)
-            self._respond(500, {"error": f"{type(e).__name__}: {e}", "trace": tb})
+            self._respond(500, {"error": f"{type(e).__name__}: {e}"})
 
     def do_OPTIONS(self):
         self.send_response(200)
