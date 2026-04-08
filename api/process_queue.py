@@ -47,6 +47,8 @@ def refresh_download_url(original_url: str) -> str | None:
                 return None
 
             d = result["data"]
+            if not d or not isinstance(d, dict):
+                return None
             play_url = d.get("hdplay") or d.get("play") or ""
             if play_url and not play_url.startswith("http"):
                 play_url = "https://tikwm.com" + play_url
@@ -190,8 +192,8 @@ def submit_one(sb, record: dict) -> dict:
     """
     record_id = record["id"]
 
-    direct_url = record.get("direct_url", "")
-    original_url = record.get("url", "")
+    direct_url = record.get("direct_url") or ""
+    original_url = record.get("url") or ""
 
     # TikTok CDN URLs expire after a few hours -- refresh before submitting
     fresh_url = refresh_download_url(original_url)
@@ -332,15 +334,14 @@ class handler(BaseHTTPRequestHandler):
                 aai_id = record.get("assemblyai_id")
                 if aai_id:
                     submitted.append((record["id"], aai_id,
-                                      record.get("direct_url", ""), record.get("url", "")))
+                                      record.get("direct_url") or "", record.get("url") or ""))
                     continue
 
                 res = submit_one(sb, record)
                 results.append(res)
                 if res.get("assemblyai_id"):
-                    # submit_one may have refreshed the URL, re-fetch it
                     submitted.append((record["id"], res["assemblyai_id"],
-                                      record.get("direct_url", ""), record.get("url", "")))
+                                      record.get("direct_url") or "", record.get("url") or ""))
                     newly_submitted += 1
 
             # Phase 2: Poll and complete submitted items
@@ -384,8 +385,8 @@ class handler(BaseHTTPRequestHandler):
 
         except Exception as e:
             tb = traceback.format_exc()
-            print(f"[ERROR] Queue processing failed: {e}\n{tb}", file=sys.stderr)
-            self._respond(500, {"error": str(e)})
+            print(f"[ERROR] Queue processing failed: {type(e).__name__}: {e}\n{tb}", file=sys.stderr)
+            self._respond(500, {"error": f"{type(e).__name__}: {e}"})
 
     def do_OPTIONS(self):
         self.send_response(200)
