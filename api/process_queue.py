@@ -17,6 +17,48 @@ GEMINI_KEY = (os.environ.get("GEMINI_API_KEY") or "").strip()
 CRON_SECRET = (os.environ.get("CRON_SECRET") or "").strip()
 
 
+def refresh_download_url(original_url: str) -> str | None:
+    """Re-fetch a fresh download URL from the original TikTok/video URL.
+
+    TikTok CDN URLs expire after a few hours, so we need to resolve a fresh
+    one at processing time rather than using the stale one from submission.
+    """
+    import urllib.request
+    import urllib.parse
+
+    if not original_url:
+        return None
+
+    if "tiktok.com" in original_url:
+        try:
+            data = urllib.parse.urlencode({"url": original_url, "hd": 1}).encode()
+            req = urllib.request.Request(
+                "https://tikwm.com/api/",
+                data=data,
+                headers={
+                    "User-Agent": "tikscribe/1.0",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                result = json.loads(resp.read())
+
+            if result.get("code") != 0 or "data" not in result:
+                return None
+
+            d = result["data"]
+            play_url = d.get("hdplay") or d.get("play") or ""
+            if play_url and not play_url.startswith("http"):
+                play_url = "https://tikwm.com" + play_url
+            return play_url or None
+        except Exception as e:
+            print(f"[WARN] URL refresh failed ({type(e).__name__}): {e}", file=sys.stderr)
+            return None
+
+    # Non-TikTok URLs (YouTube etc.) are generally stable
+    return None
+
+
 def submit_to_assemblyai(audio_url: str) -> str:
     """Submit audio URL to AssemblyAI for transcription."""
     import urllib.request
@@ -144,10 +186,19 @@ def submit_one(sb, record: dict) -> dict:
 
     Only called for records without an existing assemblyai_id (the handler
     short-circuits records that already have one).
+    Refreshes the download URL for TikTok videos since CDN URLs expire.
     """
     record_id = record["id"]
 
     direct_url = record.get("direct_url", "")
+    original_url = record.get("url", "")
+
+    # TikTok CDN URLs expire after a few hours -- refresh before submitting
+    fresh_url = refresh_download_url(original_url)
+    if fresh_url:
+        direct_url = fresh_url
+        sb.table("transcripts").update({"direct_url": fresh_url}).eq("id", record_id).execute()
+
     if not direct_url:
         sb.table("transcripts").update({"status": "failed"}).eq("id", record_id).execute()
         return {"id": record_id, "status": "failed", "error": "No download URL"}
@@ -276,17 +327,20 @@ class handler(BaseHTTPRequestHandler):
             newly_submitted = 0
 
             # Phase 1: Submit all items to AssemblyAI (fast, ~1-2s each)
-            submitted = []  # (record_id, aai_id, direct_url)
+            submitted = []  # (record_id, aai_id, direct_url, original_url)
             for record in queued.data:
                 aai_id = record.get("assemblyai_id")
                 if aai_id:
-                    submitted.append((record["id"], aai_id, record.get("direct_url", "")))
+                    submitted.append((record["id"], aai_id,
+                                      record.get("direct_url", ""), record.get("url", "")))
                     continue
 
                 res = submit_one(sb, record)
                 results.append(res)
                 if res.get("assemblyai_id"):
-                    submitted.append((record["id"], res["assemblyai_id"], record.get("direct_url", "")))
+                    # submit_one may have refreshed the URL, re-fetch it
+                    submitted.append((record["id"], res["assemblyai_id"],
+                                      record.get("direct_url", ""), record.get("url", "")))
                     newly_submitted += 1
 
             # Phase 2: Poll and complete submitted items
@@ -294,12 +348,17 @@ class handler(BaseHTTPRequestHandler):
             if newly_submitted > 0:
                 time.sleep(10)
 
-            for record_id, aai_id, direct_url in submitted:
+            for record_id, aai_id, direct_url, original_url in submitted:
                 elapsed = time.time() - start_time
                 time_remaining = 300 - elapsed
                 if time_remaining < 30:
                     results.append({"id": record_id, "status": "deferred_timeout"})
                     continue
+
+                # Refresh URL for Gemini if it's a TikTok video
+                fresh_url = refresh_download_url(original_url)
+                if fresh_url:
+                    direct_url = fresh_url
 
                 res = complete_one(sb, record_id, aai_id, direct_url,
                                    time_remaining=time_remaining)
