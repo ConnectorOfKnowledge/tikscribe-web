@@ -2,11 +2,13 @@
 
 const isNative = window.Capacitor !== undefined;
 const API_BASE = isNative ? 'https://tikscribe-web.vercel.app/api' : '/api';
-const API_KEY = '';
+const API_KEY = (document.querySelector('meta[name="tikscribe-api-key"]')?.content || '').trim();
 
 function apiHeaders(extra = {}) {
     const headers = { 'Content-Type': 'application/json', ...extra };
-    if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+    if (API_KEY && API_KEY !== '__REPLACE_AT_DEPLOY_TIME__') {
+        headers['Authorization'] = `Bearer ${API_KEY}`;
+    }
     return headers;
 }
 

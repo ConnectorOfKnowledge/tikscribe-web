@@ -5,11 +5,20 @@ import os
 import sys
 import traceback
 from http.server import BaseHTTPRequestHandler
-from api._shared import check_auth, set_cors_headers
+from api._shared import check_auth, set_cors_headers, is_allowed_url, client_ip
+from api._rate_limit import (
+    check_ip_rate_limit,
+    check_daily_submission_cap,
+    IP_MAX_PER_WINDOW,
+    IP_WINDOW_MINUTES,
+    DAILY_SUBMISSION_CAP,
+)
 
 
 SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip()
 SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
+
+MAX_BODY_BYTES = 20_000_000  # 20 MB total payload cap (attachments are the bulk)
 
 
 def get_tiktok_info(url: str) -> dict:
@@ -108,8 +117,18 @@ class handler(BaseHTTPRequestHandler):
 
         step = "init"
         try:
+            step = "checking config"
+            if not SUPABASE_URL or not SUPABASE_KEY:
+                self._respond(500, {"error": "Server misconfigured"}, origin)
+                return
+
+            step = "checking payload size"
+            content_length = int(self.headers.get("Content-Length") or 0)
+            if content_length <= 0 or content_length > MAX_BODY_BYTES:
+                self._respond(413, {"error": "Payload too large"}, origin)
+                return
+
             step = "parsing request"
-            content_length = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(content_length))
             url = body.get("url", "").strip()
 
@@ -117,9 +136,35 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(400, {"error": "URL is required"}, origin)
                 return
 
-            step = "checking config"
-            if not SUPABASE_URL or not SUPABASE_KEY:
-                self._respond(500, {"error": "Server misconfigured"}, origin)
+            step = "validating url"
+            if not is_allowed_url(url):
+                self._respond(400, {"error": "URL not supported"}, origin)
+                return
+
+            step = "opening db client"
+            from supabase import create_client
+            sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+            step = "circuit breaker"
+            allowed, daily_count = check_daily_submission_cap(sb)
+            if not allowed:
+                self._respond(503, {
+                    "error": "Daily submission limit reached",
+                    "cap": DAILY_SUBMISSION_CAP,
+                    "current": daily_count,
+                }, origin)
+                return
+
+            step = "ip rate limit"
+            ip = client_ip(self.headers)
+            allowed, rl_count = check_ip_rate_limit(sb, ip)
+            if not allowed:
+                self._respond(429, {
+                    "error": "Rate limit exceeded",
+                    "limit": IP_MAX_PER_WINDOW,
+                    "window_minutes": IP_WINDOW_MINUTES,
+                    "current": rl_count,
+                }, origin)
                 return
 
             # Get basic video info (title, creator, thumbnail) -- fast, 2-3s
@@ -140,10 +185,11 @@ class handler(BaseHTTPRequestHandler):
                     if len(att.get("data", "")) > 2_800_000:
                         att["data"] = att["data"][:100] + "...[truncated]"
 
-            # Save to Supabase as queued -- processing happens in background cron
+            # Save to Supabase as queued -- processing happens in background
+            # via the Supabase edge function (webhook on INSERT) and the
+            # pg_cron safety net. The legacy /api/process_queue cron remains
+            # live during rollout.
             step = "saving to queue"
-            from supabase import create_client
-            sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
             insert_data = {
                 "url": url,

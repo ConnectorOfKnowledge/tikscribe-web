@@ -13,6 +13,11 @@ SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
 
 VALID_STATUSES = {"reviewed", "backburner", "attached", None}
 
+MAX_BODY_BYTES = 20_000_000  # attachments can push size up; match /api/transcribe
+MAX_NOTES_LEN = 4000
+MAX_ATTACHMENTS = 5
+MAX_ATTACHMENT_DATA_LEN = 2_800_000  # ~2.1 MB decoded, per original design
+
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -25,7 +30,11 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            content_length = int(self.headers.get("Content-Length", 0))
+            content_length = int(self.headers.get("Content-Length") or 0)
+            if content_length <= 0 or content_length > MAX_BODY_BYTES:
+                self._respond(413, {"error": "Payload too large"}, origin)
+                return
+
             body = json.loads(self.rfile.read(content_length))
 
             record_id = body.get("id")
@@ -42,17 +51,28 @@ class handler(BaseHTTPRequestHandler):
                 }, origin)
                 return
 
+            if isinstance(review_notes, str) and len(review_notes) > MAX_NOTES_LEN:
+                review_notes = review_notes[:MAX_NOTES_LEN]
+
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
             update_data = {"review_status": review_status}
             if review_notes:
                 update_data["review_notes"] = review_notes
 
-            # Support editing notes, attachments, and rating
             if "notes" in body:
-                update_data["notes"] = body["notes"]
+                notes = body.get("notes") or ""
+                if isinstance(notes, str) and len(notes) > MAX_NOTES_LEN:
+                    notes = notes[:MAX_NOTES_LEN]
+                update_data["notes"] = notes
             if "attachments" in body:
-                update_data["attachments"] = body["attachments"]
+                attachments = body.get("attachments") or []
+                if isinstance(attachments, list):
+                    attachments = attachments[:MAX_ATTACHMENTS]
+                    for att in attachments:
+                        if isinstance(att, dict) and len(att.get("data", "")) > MAX_ATTACHMENT_DATA_LEN:
+                            att["data"] = att["data"][:100] + "...[truncated]"
+                update_data["attachments"] = attachments
             if "rating" in body:
                 rating = body["rating"]
                 if rating is not None:

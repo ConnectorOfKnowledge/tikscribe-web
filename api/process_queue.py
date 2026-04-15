@@ -195,7 +195,23 @@ def submit_one(sb, record: dict) -> dict:
     direct_url = record.get("direct_url") or ""
     original_url = record.get("url") or ""
 
-    # TikTok CDN URLs expire after a few hours -- refresh before submitting
+    # Atomic claim: flip queued -> processing only if still queued. Mirrors
+    # the claim_transcript_for_processing RPC used by the new webhook path
+    # but keeps this legacy module self-contained. Without this gate, the
+    # SELECT/UPDATE split here raced with the edge function's claim and
+    # could double-submit to AssemblyAI at 06:00 UTC.
+    retry_count = (record.get("retry_count") or 0) + 1
+    claim = (
+        sb.table("transcripts")
+        .update({"status": "processing", "retry_count": retry_count})
+        .eq("id", record_id)
+        .eq("status", "queued")
+        .execute()
+    )
+    if not claim.data:
+        return {"id": record_id, "status": "skipped", "reason": "already_claimed"}
+
+    # TikTok CDN URLs expire after a few hours -- refresh after we own the row
     fresh_url = refresh_download_url(original_url)
     if fresh_url:
         direct_url = fresh_url
@@ -204,12 +220,6 @@ def submit_one(sb, record: dict) -> dict:
     if not direct_url:
         sb.table("transcripts").update({"status": "failed"}).eq("id", record_id).execute()
         return {"id": record_id, "status": "failed", "error": "No download URL"}
-
-    retry_count = (record.get("retry_count") or 0) + 1
-    sb.table("transcripts").update({
-        "status": "processing",
-        "retry_count": retry_count,
-    }).eq("id", record_id).execute()
 
     try:
         aai_id = submit_to_assemblyai(direct_url)
@@ -310,11 +320,18 @@ class handler(BaseHTTPRequestHandler):
             from supabase import create_client
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-            # Fetch all queued + stuck-processing items (up to 20)
+            # Fetch ONLY queued rows. 'processing' is now an exclusive
+            # ownership state held by whichever pipeline claimed the row;
+            # the new webhook path's edge function uses a SECURITY DEFINER
+            # RPC that transitions queued->processing atomically. If a row
+            # gets stranded in 'processing', release_stuck_transcript_rows()
+            # runs every 10 min via pg_cron and resets it back to 'queued'.
+            # Without this fix, both pipelines could re-claim the same row
+            # at 06:00 UTC and double-bill AssemblyAI.
             queued = (
                 sb.table("transcripts")
                 .select("id, url, direct_url, retry_count, assemblyai_id")
-                .in_("status", ["queued", "processing"])
+                .eq("status", "queued")
                 .lt("retry_count", 3)
                 .order("created_at")
                 .limit(20)

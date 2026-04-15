@@ -9,6 +9,9 @@
     "api/process_queue.py": {
       "maxDuration": 300
     },
+    "api/process_one.py": {
+      "maxDuration": 300
+    },
     "api/analyze_visual.py": {
       "maxDuration": 60
     }

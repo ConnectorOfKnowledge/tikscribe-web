@@ -4,11 +4,14 @@ import json
 import os
 import sys
 from http.server import BaseHTTPRequestHandler
-from api._shared import check_auth, set_cors_headers
+from api._shared import check_auth, set_cors_headers, client_ip
+from api._rate_limit import check_ip_rate_limit, IP_MAX_PER_WINDOW, IP_WINDOW_MINUTES
 
 SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip()
 SUPABASE_KEY = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
 GEMINI_KEY = (os.environ.get("GEMINI_API_KEY") or "").strip()
+
+MAX_BODY_BYTES = 4096
 
 
 def run_gemini_analysis(video_url: str) -> str | None:
@@ -70,7 +73,11 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            content_length = int(self.headers.get("Content-Length", 0))
+            content_length = int(self.headers.get("Content-Length") or 0)
+            if content_length <= 0 or content_length > MAX_BODY_BYTES:
+                self._respond(413, {"error": "Payload too large"}, origin)
+                return
+
             body = json.loads(self.rfile.read(content_length))
             record_id = body.get("id")
 
@@ -85,21 +92,33 @@ class handler(BaseHTTPRequestHandler):
             from supabase import create_client
             sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-            # Get the record
-            result = sb.table("transcripts").select("id, direct_url, visual_status").eq("id", record_id).execute()
-            if not result.data:
-                self._respond(404, {"error": "Transcript not found"}, origin)
+            ip = client_ip(self.headers)
+            allowed, rl_count = check_ip_rate_limit(sb, f"visual:{ip}")
+            if not allowed:
+                self._respond(429, {
+                    "error": "Rate limit exceeded",
+                    "limit": IP_MAX_PER_WINDOW,
+                    "window_minutes": IP_WINDOW_MINUTES,
+                    "current": rl_count,
+                }, origin)
                 return
 
-            record = result.data[0]
-            direct_url = record.get("direct_url", "")
+            # Atomic claim via RPC: prevents concurrent Gemini runs on one row.
+            # Returns empty if already processing / legacy_skip / missing.
+            claim = sb.rpc("claim_visual_for_processing", {"p_id": record_id}).execute()
+            claimed = (claim.data or [None])[0] if isinstance(claim.data, list) else claim.data
+            if not claimed:
+                self._respond(409, {"error": "Not eligible for visual analysis"}, origin)
+                return
 
+            direct_url = claimed.get("direct_url") or ""
             if not direct_url:
+                sb.table("transcripts").update({
+                    "visual_status": "failed",
+                    "last_error": "no direct_url",
+                }).eq("id", record_id).execute()
                 self._respond(400, {"error": "No video URL available for this transcript"}, origin)
                 return
-
-            # Update status to processing
-            sb.table("transcripts").update({"visual_status": "processing"}).eq("id", record_id).execute()
 
             # Run Gemini (full audio + visual analysis)
             visual = run_gemini_analysis(direct_url)
